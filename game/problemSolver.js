@@ -216,7 +216,7 @@ export class ProblemSolver {
         this.restartAll();
       }
       else if (e.target.id === 'homepage'){
-        window.location.href = "../homepage.html";
+        window.location.href = "../index.html";
       }
     });
 
