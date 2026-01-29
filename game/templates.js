@@ -136,7 +136,7 @@ STEP3: (problem, solvedVariables = []) => `
 },
 
   CALCULATOR: (given1, given2) => {
-  const buttons = ['C', '⌫', '±', '÷', '7', '8', '9', '×', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '='];
+  const buttons = ['C', '⌫', '±', '÷', '7', '8', '9', '×', '4', '5', '6', '-', '1', '2', '3', '+', '(', ')', 'sin', 'cos', 'tan', '0', '.', '='];
   return `
       <div class="calc-header" style="cursor: grab; padding: 10px; background: #2196F3; color: white; border-radius: 12px 12px 0 0; margin: 0 -10px 15px -10px; user-select: none;">Calculator <span class="close-btn">&times;</span></div>
       <div style="text-align: center; margin-bottom: 20px;">

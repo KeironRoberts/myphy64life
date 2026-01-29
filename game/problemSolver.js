@@ -246,6 +246,8 @@ export class ProblemSolver {
           const finalInput = document.getElementById('finalAnswer');
           if (finalInput && !finalInput.value) finalInput.value = display.value;
         }
+      } else if (e.target.classList.contains('close-btn')) {
+        this.toggleCalculator();
       }
     });
 
@@ -258,6 +260,8 @@ export class ProblemSolver {
       else if (e.key === '-') value = '-';
       else if (e.key === '*') value = '×';
       else if (e.key === '/') value = '÷';
+      else if (e.key === '(') value = '(';
+      else if (e.key === ')') value = ')';
       else if (e.key === 'Enter' || e.key === '=') value = '=';
       else if (e.key === 'Backspace') value = 'BACKSPACE';
       else if (e.key === 'Escape') return this.toggleCalculator();
@@ -280,13 +284,32 @@ export class ProblemSolver {
         break;
       case '=':
         try {
-          let expr = current.replace(/×/g, '*').replace(/÷/g, '/');
+          let expr = current
+            .replace(/×/g, '*')
+            .replace(/÷/g, '/')
+            .replace(/sin/g, 'Math.sin')
+            .replace(/cos/g, 'Math.cos')
+            .replace(/tan/g, 'Math.tan');
+          
+          // Convert degrees to radians for trig functions
+          expr = expr.replace(/Math\.(sin|cos|tan)\(([^)]+)\)/g, (match, func, angle) => {
+            return `Math.${func}(${angle}*Math.PI/180)`;
+          });
+          
           let result = eval(expr);
-          display.value = isNaN(result) ? 'Error' : result.toFixed(1);
-        } catch { display.value = 'Error'; }
+          display.value = isNaN(result) ? 'Error' : result.toFixed(4);
+        } catch { 
+          display.value = 'Error'; 
+        }
         break;
       case '+': case '-': case '×': case '÷':
         display.value = current === '0' ? value : current + value;
+        break;
+      case '(': case ')':
+        display.value = current === '0' ? value : current + value;
+        break;
+      case 'sin': case 'cos': case 'tan':
+        display.value = current === '0' ? value + '(' : current + value + '(';
         break;
       default:
         display.value = (current === '0' && value !== '.') ? value : current + value;
