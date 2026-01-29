@@ -58,16 +58,37 @@ function drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds) {
   ctx.fillStyle = styles.groundGrass;
   ctx.fillRect(0, groundY, logicalWidth, logicalHeight - groundY - 60);
 
+  // Clouds
   ctx.save();
   ctx.globalAlpha = 0.7;
   for (let cloud of clouds) {
     ctx.drawImage(cloud.img, cloud.x, cloud.y, 150, 105);
   }
   ctx.restore();
+
+  // Press SPACE text when animation stopped
+  if (!isAnimating && gameReady) {
+    ctx.save();
+    ctx.font = 'bold 32px Courier New, monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const text = 'Press SPACE to replay animation';
+    const textX = logicalWidth / 2;
+    const textY = 100;
+    
+    ctx.strokeText(text, textX, textY);
+    ctx.fillText(text, textX, textY);
+    ctx.restore();
+  }
 }
 
 function drawTrail(ctx, positions) {
   if (positions.length <= 1) return;
+  const trailLength = Math.min(50, positions.length); // Limit trail
   ctx.shadowBlur = 10;
   ctx.shadowColor = styles.trailShadow;
   ctx.strokeStyle = styles.trailStroke;
@@ -136,10 +157,8 @@ function startAnimation() {
 window.addEventListener('problemChanged', (e) => {
   const problem = e.detail;
   const vxGiven = problem.givens.find(g => g.target === 'vx');
-  const tGiven = givens.find(g => g.target === 't');
   currentVx = (vxGiven ? parseFloat(vxGiven.value) : 25) * 3;
-  // Use fixed vy for visual consistency
-  currentVy = 20;
+  currentVy = 40 * 3; // Fixed visual consistency
   currentStartX = 50;
   setTimeout(startAnimation, 100);
 });

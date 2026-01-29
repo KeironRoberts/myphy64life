@@ -2,25 +2,63 @@
 import { problems } from './config.js';
 import { TEMPLATES } from './templates.js';
 
+
 export class ProblemSolver {
   constructor() {
-    this.currentStep = 1;
-    this.score = 0;
-    this.startTime = Date.now();
-    this.currentProblem = 0;
-    this.mistakes = 0;
-    this.solvedProblems = new Set();
-    this.currentUnknownIndex = 0;
-    this.solvedVariables = [];
-    this.init();
-  }
+  this.currentStep = 1;
+  this.score = 0;
+  this.startTime = Date.now();
+  this.currentProblem = 0;
+  this.mistakes = 0;
+  this.solvedProblems = new Set();
+  this.currentUnknownIndex = 0;
+  this.solvedVariables = [];
+ 
+  this.completedProblems = JSON.parse(localStorage.getItem('physicsProgress') || '[]');
+  this.highScore = parseInt(localStorage.getItem('physicsHighScore') || '0');
+  this.debouncedSetupDrag = this.debounce(this.setupDragDrop.bind(this), 200);
+  
+  // Drag state for calculator
+  this.isDragging = false;
+  this.dragOffsetX = 0;
+  this.dragOffsetY = 0;
+  this.boundMouseMove = null;
+  this.boundMouseUp = null;
 
-
+  // Audio setup
+  this.correctSound = new Audio('./sounds/correct-yay.mp3');
+  this.correctSound.volume = 0.33;
+  this.wrongSound = new Audio('./sounds/wrong-buzzer.mp3');
+  this.wrongSound.volume = 0.33;
+  this.backgroundMusic = null;
+  this.musicFiles = [
+    './sounds/music/Cartoon, Jéja - On & On (feat. Daniel Levi).mp3',
+    './sounds/music/DEAF KEV - Invincible.mp3',
+    './sounds/music/Different Heaven & EH!DE - My Heart  Drumstep.mp3',
+    './sounds/music/Disfigure - Blank.mp3',
+    './sounds/music/Elektronomia - Sky High Progressive House.mp3'
+  ];
+ 
+  window.addEventListener('beforeunload', () => this.saveProgress());
+  document.addEventListener('keydown', (e) => this.handleDebugKeybind(e));
+  this.init();
+}
   /* INITIALIZE */
   init() {
     this.problems = problems;
     this.selectRandomProblem();
     this.setupUI();
+    this.setupMusicOnFirstInteraction();
+  }
+
+  setupMusicOnFirstInteraction() {
+    const playMusicOnce = () => {
+      this.playBackgroundMusic();
+      document.removeEventListener('click', playMusicOnce);
+      document.removeEventListener('keydown', playMusicOnce);
+    };
+    document.addEventListener('click', playMusicOnce, { once: true });
+    document.addEventListener('keydown', playMusicOnce, { once: true });
   }
   selectRandomProblem() {
     let attempts = 0;
@@ -28,7 +66,7 @@ export class ProblemSolver {
       this.currentProblem = Math.floor(Math.random() * this.problems.length);
       attempts++;
     } while (this.solvedProblems.has(this.currentProblem) && attempts < 20);
-    
+   
     this.problem = this.problems[this.currentProblem];
     console.log('Selected problem:', this.problem.text.substring(0, 50));
   }
@@ -43,18 +81,22 @@ export class ProblemSolver {
   createGameLayout() {
     if (document.getElementById('gameContainer')) return;
 
+
     const container = document.createElement('div');
     container.id = 'gameContainer';
     Object.assign(container.style, {
       display: 'flex', alignItems: 'stretch', gap: '40px',
       maxWidth: '1450px', margin: '20px auto'
     });
-    container.style.alignItems = 'stretch'; 
+    container.style.alignItems = 'stretch';
+
 
     const canvasContainer = document.getElementById('problem-container');
 
+
     document.body.insertBefore(container, document.body.firstChild);
     container.appendChild(canvasContainer);
+
 
     this.leftPanel = document.createElement('div');
     this.leftPanel.id = 'solverPanel';
@@ -65,6 +107,7 @@ export class ProblemSolver {
       fontFamily: "'Courier New', monospace", overflowY: 'auto'
     });
     container.insertBefore(this.leftPanel, canvasContainer);
+
 
     const calcButton = document.createElement('button');
     calcButton.id = 'calcToggle';
@@ -77,6 +120,7 @@ export class ProblemSolver {
     });
     calcButton.onclick = () => this.toggleCalculator();
     this.leftPanel.appendChild(calcButton);
+
 
     const contentArea = document.createElement('div');
     contentArea.id = 'panelContent';
@@ -100,52 +144,101 @@ export class ProblemSolver {
     };
     requestAnimationFrame(update);
   }
-  renderCurrentStep() {
-    const container = document.getElementById('stepsContainer');
-    if (!container) return;
-    container.innerHTML = TEMPLATES[`STEP${this.currentStep}`](this.problem);
 
-    if (this.currentStep === 1) {
-      container.innerHTML = TEMPLATES.STEP1(this.problem);
-    } else if (this.currentStep === 2) {
-      container.innerHTML = TEMPLATES.STEP2(this.problem);
-    } else {
-      const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex];
-      if (currentUnknown) {
-        container.innerHTML = TEMPLATES.CALC_STEP(this.problem, currentUnknown, this.currentUnknownIndex, this.solvedVariables);
-      } else {
-        this.showCompletion();
-      }
-    }
 
-    document.querySelectorAll('.drop-zone:empty').forEach(zone => {
-    const varName = zone.getAttribute('data-var')?.toUpperCase() || '?';
-    zone.textContent = `${varName} = ?`;
-    });
+  debounce(func, wait) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+  playSound(audio) {
+    audio.currentTime = 0;
+    audio.play().catch(e => console.log('Audio play failed:', e));
   }
+
+  playBackgroundMusic() {
+    if (this.backgroundMusic) {
+      this.backgroundMusic.pause();
+    }
+    const randomTrack = this.musicFiles[Math.floor(Math.random() * this.musicFiles.length)];
+    this.backgroundMusic = new Audio(randomTrack);
+    this.backgroundMusic.loop = true;
+    this.backgroundMusic.volume = 0.05;
+    this.backgroundMusic.play().catch(e => console.log('Music play failed:', e));
+  }
+
+  handleDebugKeybind(e) {
+    if (e.altKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      this.nextStep();
+    }
+  }
+
+  resetProblemState() {
+    this.currentStep = 1;
+    this.currentUnknownIndex = 0;
+    this.solvedVariables = [];
+    this.startTime = Date.now();
+  }
+
+  // Start
+  renderCurrentStep() {
+  const container = document.getElementById('stepsContainer');
+  if (!container) return;
+ 
+  if (this.currentStep === 1) {
+    container.innerHTML = TEMPLATES.STEP1(this.problem);
+  } else if (this.currentStep === 2) {
+    container.innerHTML = TEMPLATES.STEP2(this.problem);
+  } else if (this.currentStep === 3) {
+    const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex || 0];
+    container.innerHTML = TEMPLATES.STEP3({ ...this.problem, unknowns: [currentUnknown] }, this.solvedVariables);
+  }
+
+  setTimeout(() => this.debouncedSetupDrag(), 100);
+}
+
+
 
   /* CALCULATOR SYSTEM */
   toggleCalculator() {
-    const overlay = document.getElementById('calcOverlay');
+    const overlay = document.getElementById('calculator');
     if (overlay) {
-      overlay.remove();
+      // Remove old drag listeners before removing element
+      if (this.boundMouseMove) {
+        document.removeEventListener('mousemove', this.boundMouseMove);
+        this.boundMouseMove = null;
+      }
+      if (this.boundMouseUp) {
+        document.removeEventListener('mouseup', this.boundMouseUp);
+        this.boundMouseUp = null;
+      }
+      // Remove old keyboard listener before removing element
       if (this.boundKeyHandler) {
         document.removeEventListener('keydown', this.boundKeyHandler);
-        delete this.boundKeyHandler;
+        this.boundKeyHandler = null;
       }
+      overlay.remove();
     } else {
       this.showCalculator();
     }
   }
   showCalculator() {
     const overlay = document.createElement('div');
-    overlay.id = 'calcOverlay';
+    overlay.id = 'calculator';
+    overlay.className = 'calculator';
     overlay.innerHTML = TEMPLATES.CALCULATOR(this.problem.givens[0]?.label, this.problem.givens[1]?.label);
-    this.leftPanel.appendChild(overlay);
+    overlay.style.left = '20px';
+    overlay.style.top = '100px';
+    document.body.appendChild(overlay);
     this.bindCalculator();
+    this.makeCalculatorDraggable();
   }
   bindCalculator() {
-    this.leftPanel.addEventListener('click', (e) => {
+    document.addEventListener('click', (e) => {
       if (e.target.classList.contains('calc-btn')) {
         const display = document.getElementById('calcDisplay');
         if (display) {
@@ -156,8 +249,9 @@ export class ProblemSolver {
       }
     });
 
+
     this.boundKeyHandler = (e) => {
-      if (!document.getElementById('calcOverlay')) return;
+      if (!document.getElementById('calculator')) return;
       let value = '';
       if ('0123456789.'.includes(e.key)) value = e.key;
       else if (e.key === '+') value = '+';
@@ -167,7 +261,7 @@ export class ProblemSolver {
       else if (e.key === 'Enter' || e.key === '=') value = '=';
       else if (e.key === 'Backspace') value = 'BACKSPACE';
       else if (e.key === 'Escape') return this.toggleCalculator();
-      
+     
       if (value) {
         e.preventDefault();
         const display = document.getElementById('calcDisplay');
@@ -178,11 +272,11 @@ export class ProblemSolver {
   }
   handleCalcInput(value, display) {
     let current = display.value;
-    
+   
     switch (value) {
       case 'C': display.value = '0'; break;
-      case 'BACKSPACE': 
-        display.value = current === '0' || current === 'Error' ? '0' : current.slice(0, -1) || '0'; 
+      case 'BACKSPACE':
+        display.value = current === '0' || current === 'Error' ? '0' : current.slice(0, -1) || '0';
         break;
       case '=':
         try {
@@ -199,6 +293,44 @@ export class ProblemSolver {
     }
   }
 
+  makeCalculatorDraggable() {
+  const calcOverlay = document.getElementById('calculator');
+  if (!calcOverlay) return;
+
+  const header = calcOverlay.querySelector('.calc-header');
+  if (!header) return;
+
+  header.style.cursor = 'grab';
+
+  const handleMouseDown = (e) => {
+    this.isDragging = true;
+    header.style.cursor = 'grabbing';
+    
+    const rect = calcOverlay.getBoundingClientRect();
+    this.dragOffsetX = e.clientX - rect.left;
+    this.dragOffsetY = e.clientY - rect.top;
+    
+    e.preventDefault();
+  };
+
+  this.boundMouseMove = (e) => {
+    if (!this.isDragging) return;
+    calcOverlay.style.left = (e.clientX - this.dragOffsetX) + 'px';
+    calcOverlay.style.top = (e.clientY - this.dragOffsetY) + 'px';
+  };
+
+  this.boundMouseUp = () => {
+    this.isDragging = false;
+    header.style.cursor = 'grab';
+  };
+
+  header.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mousemove', this.boundMouseMove);
+  document.addEventListener('mouseup', this.boundMouseUp);
+}
+
+
+
   bindEvents() {
     // Event delegation for ALL check buttons
     this.contentArea.addEventListener('click', (e) => {
@@ -208,6 +340,7 @@ export class ProblemSolver {
       }
     });
 
+
     // Completion buttons
     document.addEventListener('click', (e) => {
       if (e.target.id === 'nextProblem') {
@@ -216,159 +349,134 @@ export class ProblemSolver {
         this.restartAll();
       }
       else if (e.target.id === 'homepage'){
-        window.location.href = "../homepage.html";
+        window.location.href = "../index.html";
       }
     });
-
-    setTimeout(() => this.setupDragDrop(), 100);
   }
+
 
   /* DRAGGER SYSTEM */
   setupDragDrop() {
-  console.log('Setting up drag-drop...');
-  
-  // Drag start - contentArea delegation
-  this.contentArea.addEventListener('dragstart', (e) => {
+  if (window.problemSolverDragSetup) return;
+  window.problemSolverDragSetup = true;
+
+
+  document.addEventListener('dragstart', function(e) {
     const item = e.target.closest('.drag-item');
     if (!item) return;
-    
-    const value = item.dataset.value || item.dataset.formula;  // ✅ Value or formula
-    const label = item.dataset.label || item.textContent.trim();
-    
-    if (value) {
-      // ✅ FIXED: Store the identifying data consistently
-      e.dataTransfer.setData('text/plain', value);      // The unique identifier
-      e.dataTransfer.setData('text/label', label);      // Visual label for debugging
-      e.dataTransfer.setData('text/element-id', item.id || `drag-${value}`); // Element ID fallback
-      
-      // ✅ NEW: Mark this specific element for easy lookup
-      item.dataset.draggedValue = value;
-      item.style.opacity = '0.5';
-      console.log('Drag started:', value, label);
+
+
+    const sourceZone = item.closest('.drop-zone');
+    if (sourceZone && !sourceZone.closest('.source-zone')) {
+      e.dataTransfer.setData('text/sourceZoneId', sourceZone.dataset.var || 'unknown');
     }
+   
+    const value = item.dataset.value || item.dataset.formula || '?';
+    const originalLabel = item.textContent.trim();
+   
+    // 🔒 Store original label in BOTH dataTransfer AND dataset
+    e.dataTransfer.setData('text/plain', value);
+    e.dataTransfer.setData('text/label', originalLabel);
+    e.dataTransfer.setData('text/id', `drag-${Date.now()}`);
+   
+    item.dataset.originalLabel = originalLabel;
+    item.dataset.tempDragId = e.dataTransfer.getData('text/id');
+    item.style.opacity = '0.5';
   });
 
-  // Drag over - Blue glow effect + allow drop
-  document.addEventListener('dragover', (e) => {
+
+  document.addEventListener('dragover', function(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    
-    // Remove previous drag-over states
-    document.querySelectorAll('.drop-zone.drag-over').forEach(zone => {
-      zone.classList.remove('drag-over');
-    });
-    
-    // Light up zone under cursor
-    const targetZone = e.target.closest('.drop-zone');
-    if (targetZone) {
-      targetZone.classList.add('drag-over');
-    }
-  });
-
-  // Dragleave - Clear highlight when leaving drop zone
-  document.addEventListener('dragleave', (e) => {
-    if (!e.target.closest('.drop-zone')) {
-      document.querySelectorAll('.drop-zone.drag-over').forEach(zone => {
-        zone.classList.remove('drag-over');
-      });
-    }
-  });
-
-  // ✅ FIXED: Drop handler - now actually works!
-  document.addEventListener('drop', (e) => {
-    // Clear ALL highlights immediately
-    document.querySelectorAll('.drop-zone.drag-over').forEach(zone => {
-      zone.classList.remove('drag-over');
-    });
-    
-    e.preventDefault();
-    
+    document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
     const zone = e.target.closest('.drop-zone');
-    if (!zone) return;
-    
-    // ✅ FIXED: Get the dragged value from dataTransfer
-    const draggedValue = e.dataTransfer.getData('text/plain');
-    console.log('Drop detected:', draggedValue, 'on zone:', zone.dataset.var || zone.dataset.target);
-    
-    // ✅ Method 1: Find by data-value/data-formula (most reliable)
-    const draggedItem = document.querySelector(
-      `[data-value="${draggedValue}"], [data-formula="${draggedValue}"]`
-    );
-    
-    // ✅ Method 2: Fallback - search all drag items with matching value
-    if (!draggedItem) {
-      const allItems = document.querySelectorAll('.drag-item');
-      for (let item of allItems) {
-        if ((item.dataset.value === draggedValue || item.dataset.formula === draggedValue)) {
-          draggedItem = item;
-          break;
-        }
-      }
-    }
-    
-    if (draggedItem && draggedItem !== zone.querySelector('.drag-item')) {
-      // Clear zone and move the actual DOM element
-      zone.innerHTML = '';
-      zone.appendChild(draggedItem);
-      
-      // Visual feedback
-      zone.style.background = 'rgba(76, 175, 80, 0.2)';
-      setTimeout(() => {
-        zone.style.background = '';
-      }, 500);
-      
-      console.log('✅ Item dropped successfully:', draggedValue);
-    } else {
-      console.log('❌ No valid item found for value:', draggedValue);
-    }
+    if (zone) zone.classList.add('drag-over');
   });
 
-  // Drag end - Reset dragged item opacity
-  document.addEventListener('dragend', (e) => {
-    document.querySelectorAll('.drag-item').forEach(item => {
-      item.style.opacity = '1';
+
+  document.addEventListener('drop', function(e) {
+  e.preventDefault(); // Prevent browser from interrupting
+  document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over')); // Handle CSS Blue Hover Design
+
+
+  // Variables
+  const zone = e.target.closest('.drop-zone');
+  if (!zone) return; // NULL Prevention
+  const value = e.dataTransfer.getData('text/plain');
+  const originalLabel = e.dataTransfer.getData('text/label');
+  const tempId = e.dataTransfer.getData('text/id');
+  const targetVar = zone.dataset.var || zone.dataset.target;
+  const sourceZoneId = e.dataTransfer.getData('text/sourceZoneId');
+
+
+  if (sourceZoneId !== 'unknown') {
+    const sourceZone = document.querySelector(`[data-var="${sourceZoneId}"]`);
+    if (sourceZone) {
+      sourceZone.innerHTML = `${sourceZoneId.toUpperCase()} = ?`;
+      sourceZone.dataset.value = '?';
+    }
+  }
+ 
+  // Remove source item
+  const sourceItem = document.querySelector(`[data-temp-drag-id="${tempId}"]`);
+  if (sourceItem) sourceItem.remove();
+
+
+  // Initialize drag-items
+  const createDragItem = (itemData, isDropZone = false) => {
+    const item = document.createElement('div');
+    item.className = 'drag-item';
+    item.draggable = true;
+    Object.assign(item.dataset, {
+      value: itemData.value,
+      originalLabel: itemData.originalLabel,
+      label: itemData.label,
+      ...(isDropZone && { target: itemData.target })
     });
-    
-    // Clear any remaining highlights
-    document.querySelectorAll('.drop-zone.drag-over').forEach(zone => {
-      zone.classList.remove('drag-over');
-    });
+    item.textContent = isDropZone ? itemData.label : itemData.originalLabel;
+    const bgColor = isDropZone ? '#4CAF50' : '#c2bc45ff';
+    item.style.cssText = `padding: 10px 15px; background: ${bgColor}; border-radius: 8px; font-weight: bold; text-align: center; cursor: grab;`;
+    return item;
+  };
+
+
+  // SWAPPING MECHANIC
+  const existingValue = zone.querySelector('.drag-item');
+  if (existingValue) {
+    const sourceContainer = document.querySelector('.source-zone');
+    if (sourceContainer) {
+      // Create item to be brought back to source
+      const restoredItem = createDragItem({
+        value: existingValue.dataset.value,
+        originalLabel: existingValue.dataset.originalLabel,
+        label: existingValue.dataset.label
+      }, false);
+      sourceContainer.appendChild(restoredItem);
+    }
+  }
+ 
+  // Update drop-zone text AND add draggable item
+  if (targetVar && !zone.closest('.source-zone')) {
+    zone.innerHTML = `${targetVar.toUpperCase()} = `;
+   
+    // Store data for checking
+    zone.dataset.value = value;
+    zone.dataset.label = originalLabel;
+    zone.dataset.target = targetVar;
+   
+    // Display item
+    const displayItem = createDragItem({
+      value,
+      originalLabel,
+      label: originalLabel,
+      target: targetVar
+    }, true);
+    zone.appendChild(displayItem);
+    this.updateEmptyZones();
+  }
   });
 }
-  createDragItem(value, target = null) {
-    const given = this.problem.givens.find(g => g.value === value);
-    const label = given ? given.label : value;
-    
-    const div = document.createElement('div');
-    div.className = 'drag-item';
-    div.draggable = true;
-    div.dataset.value = value;
-    div.dataset.label = label;
-    if (target) div.dataset.target = target;
-    
-    div.style.cssText = `
-      padding: 10px 15px; margin: 5px; 
-      background: #c2bc45ff; border-radius: 8px; 
-      cursor: grab; display: inline-block; 
-      font-weight: bold; min-width: 80px; text-align: center;
-    `;
-    div.textContent = label;
-    return div;
-}
-  handleDrop(e) {
-  const zone = e.target.closest('.drop-zone');
-  if (!zone) return;
-  
-  const payload = e.dataTransfer.getData('text/plain');
-  const label = e.dataTransfer.getData('text/label');
-  
-  // Just MOVE the DOM element - NO recreation
-  const dragged = document.querySelector(`[data-payload="${payload}"]`);
-  if (dragged) {
-    zone.innerHTML = '';
-    zone.appendChild(dragged);
-  }
-}
+
 
   /* CHECKING SYSTEM */
   checkStep1() {
@@ -376,84 +484,64 @@ export class ProblemSolver {
   const correct = Array.from(zones).every(zone => {
     const item = zone.querySelector('.drag-item');
     const expected = this.problem.givens.find(g => g.target === zone.dataset.var);
-    const targetVar = zone.dataset.var;
-    
-    // Case 1: GIVEN variable - must match exact value
-    if (expected) {
-      return item?.dataset.value === expected.value;
-    }
-    
-    // Case 2: UNKNOWN variable - "?" is correct
+   
+    if (expected) return item?.dataset.value === expected.value;
     return item?.dataset.value === '?';
   });
-
-  console.log('Step 1 correct:', correct);
-  
+ 
   if (correct) {
-    this.awardPoints(30);
+    this.playSound(this.correctSound);
+    this.updateScore(30);
+    this.solvedVariables = this.problem.givens.map(g => ({
+      value: g.value,
+      target: g.target,
+      label: g.label
+    }));
+    this.nextStep();
   } else {
-    this.penalize();
+    this.playSound(this.wrongSound);
+    this.updateScore(0, true);
   }
 }
   checkStep2() {
-  console.group('STEP 2 DEBUG');
-  
   const zones = document.querySelectorAll('.drop-zone[data-target]');
-  console.log('Found zones:', zones.length);
-  
-  Array.from(zones).forEach((zone, i) => {
-    const item = zone.querySelector('.drag-item');
-    const formulaData = item?.dataset.formula;
-    const target = zone.dataset.target;
-    const expected = this.problem.formulas.find(f => f.target === target);
-    
-    console.log(`Zone ${i}:`, {
-      target,
-      hasItem: !!item,
-      itemFormula: formulaData,
-      expectedFormula: expected?.formula,
-      isCorrect: item && formulaData === expected?.formula
-    });
-  });
-  
   const correct = Array.from(zones).every(zone => {
     const item = zone.querySelector('.drag-item');
-    const expectedFormula = this.problem.formulas.find(f => f.target === zone.dataset.target);
-    return item && item.dataset.formula === expectedFormula?.formula;
+    const targetVar = zone.dataset.target;
+    const expectedFormula = this.problem.formulas.find(f => f.target === targetVar);
+   
+    return item && item.dataset.target === expectedFormula?.target;
   });
-  
-  console.log('FINAL RESULT:', correct);
-  console.groupEnd();
-  
+ 
   if (correct) {
-    this.awardPoints(30);
+    this.playSound(this.correctSound);
+    this.updateScore(30);
+    this.nextStep();
   } else {
-    this.penalize();
+    this.playSound(this.wrongSound);
+    this.updateScore(0, true);
   }
 }
   checkStep3() {
     const answer = parseFloat(document.getElementById('finalAnswer')?.value);
     const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex];
     const expected = currentUnknown?.answer;
-    
-    console.log("Answer:", answer, "Expected:", expected);
-    
+   
     if (isNaN(answer)) return this.highlightWrongAnswer();
-    
+   
     const tolerance = 1.0;
     if (Math.abs(answer - expected) <= tolerance) {
-      // Save solved variable
+      this.playSound(this.correctSound);
+      
       this.solvedVariables.push({
         value: answer,
         target: currentUnknown.target,
         label: `${answer} ${currentUnknown.target.toUpperCase()}`
       });
-      
+     
       this.currentUnknownIndex++;
-      this.score += 40;
-      this.updateScore();
-      
-      // Next unknown or complete
+      this.updateScore(40);
+     
       setTimeout(() => {
         if (this.problem.unknowns?.[this.currentUnknownIndex]) {
           this.renderCurrentStep();
@@ -462,6 +550,7 @@ export class ProblemSolver {
         }
       }, 800);
     } else {
+      this.playSound(this.wrongSound);
       this.highlightWrongAnswer();
     }
 }
@@ -475,30 +564,29 @@ export class ProblemSolver {
         input.style.background = 'white';
       }, 1000);
     }
-    this.penalize();
+    this.updateScore(0, true);
 }
 
   /* SCORING SYSTEM */
-  awardPoints(basePoints) {
-    const timeBonus = Math.max(0.5, 3.0 - (Date.now() - this.startTime) / 10000);
-    this.score += basePoints * timeBonus;
-    this.updateScore();
-    this.nextStep();
-  }
-  penalize() {
-    this.mistakes++;
-    this.score = Math.max(0, this.score - 10);
-    this.updateScore();
-  }
-  updateScore() {
+  updateScore(points = 0, isPenalty = false) {
+    if (isPenalty) {
+      this.mistakes++;
+      this.score = Math.max(0, this.score - 10);
+    } else if (points > 0) {
+      const timeBonus = Math.max(0.5, 3.0 - (Date.now() - this.startTime) / 10000);
+      this.score += points * timeBonus;
+    }
+    
     const scoreEl = document.getElementById('scoreDisplay');
     if (scoreEl) scoreEl.textContent = Math.round(this.score);
   }
+
 
   nextStep() {
     this.currentStep++;
     this.renderCurrentStep();
   }
+
 
   showCompletion() {
     this.solvedProblems.add(this.currentProblem);
@@ -512,18 +600,21 @@ export class ProblemSolver {
         </div>
       </div>
     `;
+
+
+    localStorage.setItem('physicsHighScore', Math.max(this.highScore, this.score));
+    this.completedProblems.push(this.currentProblem);
+    localStorage.setItem('physicsProgress', JSON.stringify(this.completedProblems.slice(-10)));
   }
+
 
   nextProblem() {
     console.log('Next problem requested...');
-    this.currentStep = 1;
-    this.currentUnknownIndex = 0;
-    this.solvedVariables = [];
-    this.startTime = Date.now();
-    
+    this.resetProblemState();
+   
     this.selectRandomProblem(); // Fixed: select first, mark later
     window.dispatchEvent(new CustomEvent('problemChanged', { detail: this.problem }));
-    
+   
     setTimeout(() => {
       this.renderProblemText();
       this.renderCurrentStep();
@@ -531,22 +622,23 @@ export class ProblemSolver {
     }, 150);
   }
 
+
   restartAll() {
     this.score = 0;
     this.solvedProblems.clear();
-    this.currentStep = 1;
-    this.currentUnknownIndex = 0;
-    this.solvedVariables = [];
+    this.resetProblemState();
     this.selectRandomProblem();
     this.updateScore();
     this.renderCurrentStep();
     this.startTimer();
   }
 
-  goHome() {
 
-  }
+  saveProgress() {
+  localStorage.setItem('physicsHighScore', Math.max(this.highScore, this.score));
 }
+}
+
 
 // Initialize
 if (document.readyState === 'loading') {
