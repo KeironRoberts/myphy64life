@@ -1,7 +1,8 @@
 // animations.js - the canvas problem animationnn, yesss
 import { canvasSettings, physics, styles, cloudsData } from './config.js';
 
-const canvas = document.getElementById('gameCanvas');
+/** @type {HTMLCanvasElement} */
+const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('gameCanvas'));
 const ctx = canvas.getContext('2d');
 
 const { logicalWidth, logicalHeight } = canvasSettings;
@@ -17,7 +18,7 @@ function resizeCanvasDisplay() {
   const maxWidth = Math.max(320, Math.min(logicalWidth, container.clientWidth - padding));
   canvas.style.width = maxWidth + 'px';
   const displayedWidth = canvas.clientWidth || maxWidth;
-  const desiredHeight = Math.round(displayedWidth * logicalHeight / logicalWidth);
+  const desiredHeight = Math.round((displayedWidth * logicalHeight) / logicalWidth);
   canvas.style.height = desiredHeight + 'px';
 }
 resizeCanvasDisplay();
@@ -47,7 +48,7 @@ const cloudImg = new Image();
 cloudImg.src = 'images/cloud2.png';
 cloudImg.onload = () => {
   clouds.length = 0;
-  clouds.push(...cloudsData.map(data => ({ img: cloudImg, ...data })));
+  clouds.push(...cloudsData.map((data) => ({ img: cloudImg, ...data })));
   gameReady = true;
   startAnimation();
 };
@@ -87,11 +88,11 @@ function drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds) {
     ctx.lineWidth = 2;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
+
     const text = 'Press SPACE to replay animation';
     const textX = logicalWidth / 2;
     const textY = 100;
-    
+
     ctx.strokeText(text, textX, textY);
     ctx.fillText(text, textX, textY);
     ctx.restore();
@@ -129,16 +130,16 @@ function drawProjectile(ctx, x, y, radius, isGrounded = false) {
 
 function update(currentTime) {
   if (!isAnimating) return;
-  
+
   const deltaTime = Math.min((currentTime - lastTime) / 1000, Tscale);
   lastTime = currentTime;
   t += deltaTime * 10;
-  
+
   // Use current problem physics values
   const x = currentStartX + currentVx * t;
   const y = startY - (currentVy * t - 0.5 * g * t * t);
   const ballBottom = y + radius;
-  
+
   if (ballBottom >= groundY || x > logicalWidth) {
     isAnimating = false;
     drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds);
@@ -147,13 +148,13 @@ function update(currentTime) {
     return;
   }
 
-  positions.push({x, y});
+  positions.push({ x, y });
   if (positions.length > 300) positions.shift();
 
   drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds);
   drawTrail(ctx, positions);
   drawProjectile(ctx, x, y, radius);
-  
+
   requestAnimationFrame(update);
 }
 
@@ -168,7 +169,7 @@ function startAnimation() {
 // PROBLEM SOLVER INTEGRATION - Sync animation with current problem
 window.addEventListener('problemChanged', (e) => {
   const problem = e.detail;
-  const vxGiven = problem.givens.find(g => g.target === 'vx');
+  const vxGiven = problem.givens.find((g) => g.target === 'vx');
   currentVx = (vxGiven ? parseFloat(vxGiven.value) : 25) * 3;
   currentVy = 40 * 3; // Fixed visual consistency
   currentStartX = 50;
@@ -176,7 +177,6 @@ window.addEventListener('problemChanged', (e) => {
   resizeCanvasDisplay();
   setTimeout(startAnimation, 100);
 });
-
 
 // Manual restart controls
 document.addEventListener('keydown', (e) => {
@@ -195,7 +195,7 @@ document.addEventListener('keyup', (e) => {
 // Typewriter effect (unused but kept for styling)
 function domTypeWriter(element, text, speed = 10, i = 0) {
   if (i === 0) element.innerHTML = '';
-  
+
   if (i < text.length) {
     element.innerHTML = text.slice(0, i + 1) + '<span class="blink">|</span>';
     setTimeout(() => domTypeWriter(element, text, speed, i + 1), speed);
