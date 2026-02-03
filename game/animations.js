@@ -8,8 +8,20 @@ const { logicalWidth, logicalHeight } = canvasSettings;
 const dpr = window.devicePixelRatio || 1;
 canvas.width = logicalWidth * dpr;
 canvas.height = logicalHeight * dpr;
-canvas.style.width = logicalWidth + 'px';
-canvas.style.height = logicalHeight + 'px';
+// Make canvas focusable and responsive at display size (internal buffer stays fixed for crispness)
+canvas.tabIndex = 0;
+canvas.style.maxWidth = '100%';
+function resizeCanvasDisplay() {
+  const container = document.getElementById('problem-container') || document.body;
+  const padding = 40; // keep some breathing room
+  const maxWidth = Math.max(320, Math.min(logicalWidth, container.clientWidth - padding));
+  canvas.style.width = maxWidth + 'px';
+  const displayedWidth = canvas.clientWidth || maxWidth;
+  const desiredHeight = Math.round(displayedWidth * logicalHeight / logicalWidth);
+  canvas.style.height = desiredHeight + 'px';
+}
+resizeCanvasDisplay();
+window.addEventListener('resize', resizeCanvasDisplay);
 ctx.scale(dpr, dpr);
 
 let t = 0;
@@ -160,6 +172,8 @@ window.addEventListener('problemChanged', (e) => {
   currentVx = (vxGiven ? parseFloat(vxGiven.value) : 25) * 3;
   currentVy = 40 * 3; // Fixed visual consistency
   currentStartX = 50;
+  // Resize display to match any layout changes then start animation
+  resizeCanvasDisplay();
   setTimeout(startAnimation, 100);
 });
 
@@ -192,6 +206,7 @@ function domTypeWriter(element, text, speed = 10, i = 0) {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Initial animation start
+  // Ensure canvas matches layout and start animation if ready
+  resizeCanvasDisplay();
   if (gameReady) startAnimation();
 });
