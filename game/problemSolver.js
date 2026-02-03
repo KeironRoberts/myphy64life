@@ -1,85 +1,133 @@
 // problemSolver.js - kill me
 import { problems } from './config.js';
 import { TEMPLATES } from './templates.js';
+import { GameUtilities } from './gameUtilities.js';
 
 
 export class ProblemSolver {
   constructor() {
-  this.currentStep = 1;
-  this.score = 0;
-  this.startTime = Date.now();
-  this.currentProblem = 0;
-  this.mistakes = 0;
-  this.solvedProblems = new Set();
-  this.currentUnknownIndex = 0;
-  this.solvedVariables = [];
- 
-  this.completedProblems = JSON.parse(localStorage.getItem('physicsProgress') || '[]');
-  this.highScore = parseInt(localStorage.getItem('physicsHighScore') || '0');
-  this.debouncedSetupDrag = this.debounce(this.setupDragDrop.bind(this), 200);
-  
-  // Drag state for calculator
-  this.isDragging = false;
-  this.dragOffsetX = 0;
-  this.dragOffsetY = 0;
-  this.boundMouseMove = null;
-  this.boundMouseUp = null;
+    // Game state
+    this.currentStep = 1;
+    this.score = 0;
+    this.startTime = Date.now();
+    this.currentProblem = 0;
+    this.mistakes = 0;
+    this.solvedProblems = new Set();
+    this.currentUnknownIndex = 0;
+    this.solvedVariables = [];
+    console.debug('PS: base state initialized', { currentStep: this.currentStep, score: this.score, startTime: this.startTime });
 
-  // Audio setup
-  this.correctSound = new Audio('./sounds/correct-yay.mp3');
-  this.correctSound.volume = 0.33;
-  this.wrongSound = new Audio('./sounds/wrong-buzzer.mp3');
-  this.wrongSound.volume = 0.33;
-  this.backgroundMusic = null;
-  this.musicFiles = [
-    './sounds/music/Cartoon, Jéja - On & On (feat. Daniel Levi).mp3',
-    './sounds/music/DEAF KEV - Invincible.mp3',
-    './sounds/music/Different Heaven & EH!DE - My Heart  Drumstep.mp3',
-    './sounds/music/Disfigure - Blank.mp3',
-    './sounds/music/Elektronomia - Sky High Progressive House.mp3'
-  ];
- 
-  window.addEventListener('beforeunload', () => this.saveProgress());
-  document.addEventListener('keydown', (e) => this.handleDebugKeybind(e));
-  this.init();
-}
+    // load progress
+    this.completedProblems = JSON.parse(localStorage.getItem('physicsProgress') || '[]');
+    this.highScore = parseInt(localStorage.getItem('physicsHighScore') || '0');
+    console.debug('PS: progress loaded', { completedProblems: this.completedProblems, highScore: this.highScore });
+
+    // Initialize utilities instance
+    this.utils = new GameUtilities();
+    console.debug('PS: GameUtilities initialized');
+
+    // Drag state for calculator
+    this.isDragging = false;
+    this.dragOffsetX = 0;
+    this.dragOffsetY = 0;
+    this.boundMouseMove = null;
+    this.boundMouseUp = null;
+    console.debug('PS: drag state initialized', { isDragging: this.isDragging });
+
+    // Audio setup
+    this.correctSound = new Audio('sounds/correct-yay.mp3');
+    this.correctSound.volume = 0.33;
+    this.wrongSound = new Audio('sounds/wrong-buzzer.mp3');
+    this.wrongSound.volume = 0.33;
+    this.backgroundMusic = null;
+    this.tapSfx = new Audio('sounds/tap-sfx.wav');
+    this.tapSfx.volume = 0.5;
+    this.dropSfx = new Audio('sounds/drop-sfx.wav');
+    this.dropSfx.volume = 0.5;
+
+    this.musicFiles = [
+      'sounds/music/onAndOn.mp3',
+      'sounds/music/invincible.mp3',
+      'sounds/music/drumstep.mp3',
+      'sounds/music/disfigure.mp3',
+      'sounds/music/elektronomia.mp3'
+    ];
+
+    this.debouncedSetupDrag = this.utils.debounce(this.setupDragDrop.bind(this), 200);
+    console.debug('PS: audio and music configured', { musicCount: this.musicFiles.length });
+
+    // Global event listeners
+    window.addEventListener('beforeunload', () => this.saveProgress());
+    document.addEventListener('keydown', (e) => this.handleDebugKeybind(e));
+    console.debug('PS: global event listeners added');
+
+    // initialize
+    console.debug('PS: init starting');
+    this.init();
+    console.debug('PS: init complete');
+  }
   /* INITIALIZE */
   init() {
+    console.debug('PS.init: start');
     this.problems = problems;
+    console.debug('PS.init: problems assigned', this.problems?.length);
     this.selectRandomProblem();
+    console.debug('PS.init: after selectRandomProblem');
     this.setupUI();
+    console.debug('PS.init: after setupUI');
     this.setupMusicOnFirstInteraction();
+    console.debug('PS.init: completed');
   }
 
   setupMusicOnFirstInteraction() {
     const playMusicOnce = () => {
-      this.playBackgroundMusic();
+      console.debug('PS.setupMusicOnFirstInteraction: playing background music');
+      this.utils.playBackgroundMusic(this.musicFiles);
       document.removeEventListener('click', playMusicOnce);
       document.removeEventListener('keydown', playMusicOnce);
     };
     document.addEventListener('click', playMusicOnce, { once: true });
     document.addEventListener('keydown', playMusicOnce, { once: true });
+    console.debug('PS.setupMusicOnFirstInteraction: listeners attached');
   }
   selectRandomProblem() {
+    console.debug('PS.selectRandomProblem: start');
     let attempts = 0;
     do {
       this.currentProblem = Math.floor(Math.random() * this.problems.length);
       attempts++;
     } while (this.solvedProblems.has(this.currentProblem) && attempts < 20);
-   
+
     this.problem = this.problems[this.currentProblem];
-    console.log('Selected problem:', this.problem.text.substring(0, 50));
+    console.debug('PS.selectRandomProblem: selected', this.currentProblem, this.problem?.text?.substring(0, 50));
   }
   setupUI() {
+    console.debug('PS.setupUI: start');
     this.createGameLayout();
+    console.debug('PS.setupUI: createGameLayout done');
     this.renderPanel();
+    console.debug('PS.setupUI: renderPanel done');
     this.renderProblemText();
+    console.debug('PS.setupUI: renderProblemText done');
     this.bindEvents();
+    console.debug('PS.setupUI: bindEvents done');
     this.renderCurrentStep();
-    this.startTimer();
+    console.debug('PS.setupUI: renderCurrentStep done');
+    // Wait for loading overlay to disappear before starting timer
+    if (window.__gameLoaded) {
+      console.debug('PS.setupUI: game already loaded, starting timer');
+      this.startTimer();
+    } else {
+      console.debug('PS.setupUI: waiting for gameLoaded event to start timer');
+      window.addEventListener('gameLoaded', () => this.startTimer(), { once: true });
+    }
   }
   createGameLayout() {
-    if (document.getElementById('gameContainer')) return;
+    console.debug('PS.createGameLayout: start');
+    if (document.getElementById('gameContainer')) {
+      console.debug('PS.createGameLayout: skipped - gameContainer already exists');
+      return;
+    }
 
     // Main container with a class we can target in CSS for responsive behavior
     const container = document.createElement('div');
@@ -114,10 +162,9 @@ export class ProblemSolver {
     // Styles moved to `game/gameStyle.css` for maintainability and better caching.
     // Keep a note in case dynamic adjustments are needed at runtime.
 
-    // Mute and Announcements controls (persisted state)
-    this.isMuted = localStorage.getItem('physicsMuted') === 'true';
-    let storedAnn = localStorage.getItem('physicsAnnouncements');
-    this.announcementsEnabled = (storedAnn === null) ? true : (storedAnn === 'true');
+    // Mute and Announcements controls (persisted state) - use GameUtilities
+    this.isMuted = this.utils.isMuted;
+    this.announcementsEnabled = this.utils.announcementsEnabled;
 
     if (!document.getElementById('muteToggle')) {
       const muteBtn = document.createElement('button');
@@ -128,7 +175,16 @@ export class ProblemSolver {
       // Styling handled by CSS
       muteBtn.classList.add('ps-fab-btn');
       muteBtn.classList.add('ps-fab-mute');
-      muteBtn.onclick = () => this.toggleMute();
+      muteBtn.onclick = () => {
+        const symbol = this.utils.toggleMute();
+        this.utils.applyMute(this.backgroundMusic, this.correctSound, this.wrongSound);
+        const btn = document.getElementById('muteToggle');
+        if (btn) {
+          btn.textContent = symbol;
+          btn.setAttribute('aria-pressed', this.utils.isMuted ? 'true' : 'false');
+        }
+        this.utils.announce(this.utils.isMuted ? 'Music muted' : 'Music unmuted');
+      };
       document.body.appendChild(muteBtn);
     }
 
@@ -141,7 +197,15 @@ export class ProblemSolver {
       // Styling handled by CSS
       annBtn.classList.add('ps-fab-btn');
       annBtn.classList.add('ps-fab-ann');
-      annBtn.onclick = () => this.toggleAnnouncements();
+      annBtn.onclick = () => {
+        const txt = this.utils.toggleAnnouncements();
+        this.utils.announce(this.utils.announcementsEnabled ? 'Announcements enabled' : 'Announcements disabled');
+        const btn = document.getElementById('announceToggle');
+        if (btn) {
+          btn.textContent = txt;
+          btn.setAttribute('aria-pressed', this.utils.announcementsEnabled ? 'true' : 'false');
+        }
+      };
       document.body.appendChild(annBtn);
     }
 
@@ -157,18 +221,18 @@ export class ProblemSolver {
       dbgBtn.classList.add('ps-fab-btn');
       dbgBtn.classList.add('ps-fab-dbg');
       dbgBtn.onclick = () => {
-        this.debugMode = !this.debugMode;
-        dbgBtn.setAttribute('aria-pressed', this.debugMode ? 'true' : 'false');
+        this.utils.debugMode = !this.utils.debugMode;
+        dbgBtn.setAttribute('aria-pressed', this.utils.debugMode ? 'true' : 'false');
         const ov = document.getElementById('psDebugOverlay');
-        if (this.debugMode) {
+        if (this.utils.debugMode) {
           // reset dedup state when (re)enabling debug so prior repeat counters don't carry over
-          this._debugLastMessage = null;
-          this._debugRepeatCount = 0;
+          this.utils.debugLastMessage = null;
+          this.utils.debugRepeatCount = 0;
           if (ov) ov.classList.remove('hidden');
         } else {
           if (ov) ov.classList.add('hidden');
         }
-        this.debugLog('Debug ' + (this.debugMode ? 'enabled' : 'disabled'));
+        this.utils.debugLog('Debug ' + (this.utils.debugMode ? 'enabled' : 'disabled'));
       };
       document.body.appendChild(dbgBtn);
     }
@@ -193,7 +257,8 @@ export class ProblemSolver {
       document.body.appendChild(live);
     }
 
-    this.applyMute();
+    this.utils.applyMute(this.backgroundMusic, this.correctSound, this.wrongSound);
+    console.debug('PS.createGameLayout: completed');
   }
   renderPanel() {
     if (!this.contentArea) return;
@@ -204,6 +269,7 @@ export class ProblemSolver {
     if (probText) probText.textContent = this.problem.text;
   }
   startTimer() {
+    console.debug('PS.startTimer: starting timer');
     const update = () => {
       const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
       const timerDisplay = document.getElementById('timerDisplay');
@@ -213,31 +279,42 @@ export class ProblemSolver {
     requestAnimationFrame(update);
   }
 
-
-  debounce(func, wait) {
-  let timeout;
-  return (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-}
-
-  playSound(audio) {
-    audio.currentTime = 0;
-    audio.play().catch(e => console.log('Audio play failed:', e));
+  getSourceZoneId(el) {
+    if (!el) return 'source';
+    const sourceZone = el.closest ? el.closest('.drop-zone, .source-zone') : null;
+    if (!sourceZone) return 'source';
+    if (sourceZone.closest && sourceZone.closest('.source-zone')) return 'source';
+    return (sourceZone.dataset && sourceZone.dataset.var) ? sourceZone.dataset.var : 'unknown';
   }
 
-  playBackgroundMusic() {
-    if (this.backgroundMusic) {
-      this.backgroundMusic.pause();
-    }
-    const randomTrack = this.musicFiles[Math.floor(Math.random() * this.musicFiles.length)];
-    this.backgroundMusic = new Audio(randomTrack);
-    this.backgroundMusic.loop = true;
-    this.backgroundMusic.volume = 0.05;
-    // Respect saved mute preference
-    this.backgroundMusic.muted = !!this.isMuted;
-    this.backgroundMusic.play().catch(e => console.log('Music play failed:', e));
+  zoneName(zone) {
+    if (!zone) return 'none';
+    if (zone.dataset && (zone.dataset.var || zone.dataset.target)) return zone.dataset.var || zone.dataset.target;
+    if (zone.classList && zone.classList.contains('source-zone')) return 'source';
+    return 'unknown';
+  }
+
+  safeSetDataTransfer(dt, key, value) {
+    try {
+      if (dt && dt.setData) dt.setData(key, String(value));
+    } catch (e) { }
+  }
+
+  playSfx(audio) {
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      audio.play().catch(() => { });
+    } catch (e) { }
+  }
+
+  clearDragVisuals(el) {
+    if (!el) return;
+    try {
+      el.style.opacity = '';
+      if (el.classList) el.classList.remove('dragging');
+      document.querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
+    } catch (e) { }
   }
 
   handleDebugKeybind(e) {
@@ -256,22 +333,21 @@ export class ProblemSolver {
 
   // Start
   renderCurrentStep() {
-  const container = document.getElementById('stepsContainer');
-  if (!container) return;
- 
-  if (this.currentStep === 1) {
-    container.innerHTML = TEMPLATES.STEP1(this.problem);
-  } else if (this.currentStep === 2) {
-    container.innerHTML = TEMPLATES.STEP2(this.problem);
-  } else if (this.currentStep === 3) {
-    const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex || 0];
-    container.innerHTML = TEMPLATES.STEP3({ ...this.problem, unknowns: [currentUnknown] }, this.solvedVariables);
+    console.debug('PS.renderCurrentStep: rendering step', this.currentStep);
+    const container = document.getElementById('stepsContainer');
+    if (!container) return;
+
+    if (this.currentStep === 1) {
+      container.innerHTML = TEMPLATES.STEP1(this.problem);
+    } else if (this.currentStep === 2) {
+      container.innerHTML = TEMPLATES.STEP2(this.problem);
+    } else if (this.currentStep === 3) {
+      const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex || 0];
+      container.innerHTML = TEMPLATES.STEP3({ ...this.problem, unknowns: [currentUnknown] }, this.solvedVariables);
+    }
+
+    setTimeout(() => this.debouncedSetupDrag(), 100);
   }
-
-  setTimeout(() => this.debouncedSetupDrag(), 100);
-}
-
-
 
   /* CALCULATOR SYSTEM */
   toggleCalculator() {
@@ -291,6 +367,24 @@ export class ProblemSolver {
         document.removeEventListener('keydown', this.boundKeyHandler);
         this.boundKeyHandler = null;
       }
+
+      // Dispose mobile drag handlers to avoid leaking global event listeners when calculator closed
+      try {
+        if (this._mobileDragDisposable && typeof this._mobileDragDisposable.dispose === 'function') {
+          this._mobileDragDisposable.dispose();
+          this._mobileDragDisposable = null;
+        }
+      } catch (e) { }
+
+      // Also remove native drag handlers so they can be re-registered when needed
+      try {
+        if (this._onDragStart) document.removeEventListener('dragstart', this._onDragStart);
+        if (this._onDragOver) document.removeEventListener('dragover', this._onDragOver);
+        if (this._onDrop) document.removeEventListener('drop', this._onDrop);
+        if (this._onDragEnd) document.removeEventListener('dragend', this._onDragEnd);
+        window.problemSolverDragSetup = false;
+      } catch (e) { }
+
       overlay.remove();
     } else {
       this.showCalculator();
@@ -321,8 +415,7 @@ export class ProblemSolver {
       }
     });
 
-
-    this.boundKeyHandler = (e) => {
+    this.boundKeyHandler = (/** @type {{ key: string; preventDefault: () => void; }} */ e) => {
       if (!document.getElementById('calculator')) return;
       let value = '';
       if ('0123456789.'.includes(e.key)) value = e.key;
@@ -335,7 +428,7 @@ export class ProblemSolver {
       else if (e.key === 'Enter' || e.key === '=') value = '=';
       else if (e.key === 'Backspace') value = 'BACKSPACE';
       else if (e.key === 'Escape') return this.toggleCalculator();
-     
+
       if (value) {
         e.preventDefault();
         const display = document.getElementById('calcDisplay');
@@ -346,9 +439,11 @@ export class ProblemSolver {
   }
   handleCalcInput(value, display) {
     let current = display.value;
-   
+
     switch (value) {
-      case 'C': display.value = '0'; break;
+      case 'C':
+        display.value = '0';
+        break;
       case 'BACKSPACE':
         display.value = current === '0' || current === 'Error' ? '0' : current.slice(0, -1) || '0';
         break;
@@ -360,72 +455,76 @@ export class ProblemSolver {
             .replace(/sin/g, 'Math.sin')
             .replace(/cos/g, 'Math.cos')
             .replace(/tan/g, 'Math.tan');
-          
+
           // Convert degrees to radians for trig functions
-          expr = expr.replace(/Math\.(sin|cos|tan)\(([^)]+)\)/g, (match, func, angle) => {
+          expr = expr.replace(/Math\.(sin|cos|tan)\(([^)]+)\)/g, (/** @type {any} */ match, /** @type {any} */ func, /** @type {any} */ angle) => {
             return `Math.${func}(${angle}*Math.PI/180)`;
           });
-          
+
           let result = eval(expr);
           display.value = isNaN(result) ? 'Error' : result.toFixed(4);
-        } catch { 
-          display.value = 'Error'; 
+        } catch {
+          display.value = 'Error';
         }
         break;
-      case '+': case '-': case '×': case '÷':
+      case '+':
+      case '-':
+      case '×':
+      case '÷':
         display.value = current === '0' ? value : current + value;
         break;
-      case '(': case ')':
+      case '(':
+      case ')':
         display.value = current === '0' ? value : current + value;
         break;
-      case 'sin': case 'cos': case 'tan':
+      case 'sin':
+      case 'cos':
+      case 'tan':
         display.value = current === '0' ? value + '(' : current + value + '(';
         break;
       default:
-        display.value = (current === '0' && value !== '.') ? value : current + value;
+        display.value = current === '0' && value !== '.' ? value : current + value;
     }
   }
 
   makeCalculatorDraggable() {
-  const calcOverlay = document.getElementById('calculator');
-  if (!calcOverlay) return;
+    const calcOverlay = document.getElementById('calculator');
+    if (!calcOverlay) return;
 
-  const header = calcOverlay.querySelector('.calc-header');
-  if (!header) return;
+    const header = calcOverlay.querySelector('.calc-header');
+    if (!header) return;
 
-  header.style.cursor = 'grab';
-
-  const handleMouseDown = (e) => {
-    this.isDragging = true;
-    header.style.cursor = 'grabbing';
-    
-    const rect = calcOverlay.getBoundingClientRect();
-    this.dragOffsetX = e.clientX - rect.left;
-    this.dragOffsetY = e.clientY - rect.top;
-    
-    e.preventDefault();
-  };
-
-  this.boundMouseMove = (e) => {
-    if (!this.isDragging) return;
-    calcOverlay.style.left = (e.clientX - this.dragOffsetX) + 'px';
-    calcOverlay.style.top = (e.clientY - this.dragOffsetY) + 'px';
-  };
-
-  this.boundMouseUp = () => {
-    this.isDragging = false;
     header.style.cursor = 'grab';
-  };
 
-  header.addEventListener('mousedown', handleMouseDown);
-  header.addEventListener('pointerdown', handleMouseDown);
-  document.addEventListener('mousemove', this.boundMouseMove);
-  document.addEventListener('pointermove', this.boundMouseMove);
-  document.addEventListener('mouseup', this.boundMouseUp);
-  document.addEventListener('pointerup', this.boundMouseUp);
-}
+    const handleMouseDown = (/** @type {{ clientX: number; clientY: number; preventDefault: () => void; }} */ e) => {
+      this.isDragging = true;
+      header.style.cursor = 'grabbing';
 
+      const rect = calcOverlay.getBoundingClientRect();
+      this.dragOffsetX = e.clientX - rect.left;
+      this.dragOffsetY = e.clientY - rect.top;
 
+      e.preventDefault();
+    };
+
+    this.boundMouseMove = (/** @type {{ clientX: number; clientY: number; }} */ e) => {
+      if (!this.isDragging) return;
+      calcOverlay.style.left = e.clientX - this.dragOffsetX + 'px';
+      calcOverlay.style.top = e.clientY - this.dragOffsetY + 'px';
+    };
+
+    this.boundMouseUp = () => {
+      this.isDragging = false;
+      header.style.cursor = 'grab';
+    };
+
+    header.addEventListener('mousedown', /** @type {any} */ (handleMouseDown));
+    header.addEventListener('pointerdown', /** @type {any} */ (handleMouseDown));
+    document.addEventListener('mousemove', this.boundMouseMove);
+    document.addEventListener('pointermove', this.boundMouseMove);
+    document.addEventListener('mouseup', this.boundMouseUp);
+    document.addEventListener('pointerup', this.boundMouseUp);
+  }
 
   bindEvents() {
     // Event delegation for ALL check buttons
@@ -436,16 +535,14 @@ export class ProblemSolver {
       }
     });
 
-
     // Completion buttons
     document.addEventListener('click', (e) => {
       if (e.target.id === 'nextProblem') {
         this.nextProblem();
       } else if (e.target.id === 'restartAll') {
         this.restartAll();
-      }
-      else if (e.target.id === 'homepage'){
-        window.location.href = "../index.html";
+      } else if (e.target.id === 'homepage') {
+        window.location.href = '../index.html';
       }
     });
 
@@ -469,9 +566,11 @@ export class ProblemSolver {
             const originalLabel = active.dataset.originalLabel || active.textContent.trim();
             const tempId = active.dataset.tempDragId || `kbd-${Date.now()}`;
             active.dataset.tempDragId = tempId;
-            const sourceZone = active.closest('.drop-zone, .source-zone');
-            const sourceZoneId = sourceZone ? (sourceZone.closest('.source-zone') ? 'source' : (sourceZone.dataset.var || 'unknown')) : 'source';
-            this.keyboardHeld = { elem: active, data: { value, originalLabel, tempId, sourceZoneId } };
+            const sourceZoneId = this.getSourceZoneId(active);
+            this.keyboardHeld = {
+              elem: active,
+              data: { value, originalLabel, tempId, sourceZoneId },
+            };
             active.classList.add('held');
           } else {
             this.keyboardHeld.elem.classList.remove('held');
@@ -480,7 +579,13 @@ export class ProblemSolver {
         } else if (active.classList && active.classList.contains('drop-zone')) {
           e.preventDefault();
           if (this.keyboardHeld) {
-            this.handleDrop(active, this.keyboardHeld.data.value, this.keyboardHeld.data.originalLabel, this.keyboardHeld.data.tempId, this.keyboardHeld.data.sourceZoneId);
+            this.handleDrop(
+              active,
+              this.keyboardHeld.data.value,
+              this.keyboardHeld.data.originalLabel,
+              this.keyboardHeld.data.tempId,
+              this.keyboardHeld.data.sourceZoneId
+            );
             this.keyboardHeld.elem.classList.remove('held');
             this.keyboardHeld = null;
           }
@@ -489,69 +594,122 @@ export class ProblemSolver {
     });
   }
 
-
   /* DRAGGER SYSTEM */
   setupDragDrop() {
-  if (window.problemSolverDragSetup) { console.info('ProblemSolver: setupDragDrop skipped — already initialized'); return; }
-  window.problemSolverDragSetup = true;
-  console.info('ProblemSolver: setupDragDrop started');
+    if (window.problemSolverDragSetup) {
+      console.info('ProblemSolver: setupDragDrop skipped — already initialized');
+      return;
+    }
+    window.problemSolverDragSetup = true;
+    console.info('ProblemSolver: setupDragDrop started');
 
-  const self = this;
+    // bind handlers
+    this._onDragStart = this._onDragStart.bind(this);
+    this._onDragOver = this._onDragOver.bind(this);
+    this._onDrop = this._onDrop.bind(this);
+    this._onDragEnd = this._onDragEnd.bind(this);
 
-  // Native drag events (desktop)
-  document.addEventListener('dragstart', function(e) {
+    // Decide which drag system to enable based on touch capability
+    const isTouchDevice = !!(
+      ('ontouchstart' in window) ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+    );
+
+    // store mode for debugging/teardown
+    const mode = isTouchDevice ? 'mobile' : 'native';
+    window.problemSolverDragMode = mode;
+    // Log mode to developer console and to in-app debug overlay (if enabled)
+    console.info(`ProblemSolver: drag mode detected — ${mode}`);
+    try { this.utils.debugLog(`Drag mode: ${mode}`); } catch (e) { };
+
+
+    if (isTouchDevice) {
+      // Register mobile (pointer/touch) handlers only on touch-capable devices
+      this._mobileDragDisposable = this.utils.registerMobileDragHandlers({
+        itemSelector: '.drag-item',
+        zoneSelector: '.drop-zone, .source-zone',
+        onDrop: this.handleDrop.bind(this),
+        getSourceZoneId: this.getSourceZoneId.bind(this),
+        zoneName: this.zoneName.bind(this),
+        announce: (/** @type {any} */ msg, /** @type {boolean} */ assertive) => { try { this.utils.announce(msg, assertive); } catch (e) { } },
+        debugLog: (/** @type {any} */ msg) => { try { this.utils.debugLog(msg); } catch (e) { } },
+        onPick: () => { try { this.playSfx(this.tapSfx); } catch (e) { } },
+      });
+    } else {
+      // Register native HTML5 drag handlers only on non-touch (PC) devices
+      this.registerNativeDragHandlers();
+    }
+
+    // initialize items and observer
+    this.ensureItemsInit();
+    this.attachMutationObserver();
+
+    console.info('ProblemSolver: setupDragDrop completed');
+  }
+
+  registerNativeDragHandlers() {
+    document.addEventListener('dragstart', this._onDragStart);
+    document.addEventListener('dragover', this._onDragOver);
+    document.addEventListener('drop', this._onDrop);
+    document.addEventListener('dragend', this._onDragEnd);
+  }
+
+  _onDragStart(e) {
+    if (!(e.target instanceof HTMLElement)) return;
     const item = e.target.closest('.drag-item');
     if (!item) return;
 
-    const sourceZone = item.closest('.drop-zone, .source-zone');
-    const sourceZoneId = sourceZone ? (sourceZone.closest('.source-zone') ? 'source' : (sourceZone.dataset.var || 'unknown')) : 'source';
-
+    const sourceZoneId = this.getSourceZoneId(item);
     const value = item.dataset.value || item.dataset.formula || '?';
     const originalLabel = item.dataset.originalLabel || item.textContent.trim();
     const id = item.dataset.tempDragId || `drag-${Date.now()}`;
 
-    try {
-      e.dataTransfer.setData('text/plain', value);
-      e.dataTransfer.setData('text/label', originalLabel);
-      e.dataTransfer.setData('text/id', id);
-      e.dataTransfer.setData('text/sourceZoneId', sourceZoneId);
-    } catch (err) { /* ignore */ }
+    this.safeSetDataTransfer(e.dataTransfer, 'text/plain', value);
+    this.safeSetDataTransfer(e.dataTransfer, 'text/label', originalLabel);
+    this.safeSetDataTransfer(e.dataTransfer, 'text/id', id);
+    this.safeSetDataTransfer(e.dataTransfer, 'text/sourceZoneId', sourceZoneId);
 
     item.dataset.originalLabel = originalLabel;
     item.dataset.tempDragId = id;
     item.style.opacity = '0.5';
     item.classList.add('dragging');
-    // mark native drag active so synthetic mouse fallback doesn't interfere
+    this.playSfx(this.tapSfx);
     window.problemSolverNativeDragActive = true;
     console.info('ProblemSolver: dragstart', originalLabel, 'from', sourceZoneId);
-    try { self.debugLog && self.debugLog(`dragstart: ${originalLabel} (from ${sourceZoneId})`); } catch(e) {}
-    try { self.announce && self.announce(`Picked up ${originalLabel}`); } catch(e) {}
-  });
+    try {
+      this.utils.debugLog(`dragstart: ${originalLabel} (from ${sourceZoneId})`);
+    } catch (e) { }
+    try {
+      this.utils.announce(`Picked up ${originalLabel}`);
+    } catch (e) { }
+  }
 
-  // clear native drag flag on dragend
-  document.addEventListener('dragend', function(e) {
-    window.problemSolverNativeDragActive = false;
-    try { const it = e.target.closest && e.target.closest('.drag-item'); if (it) { it.style.opacity = ''; it.classList.remove('dragging'); } } catch (err) {}
-  });
+  _onDragOver(e) {
+    try {
+      e.preventDefault(); // allow dropping
+      const it = e.target.closest && e.target.closest('.drag-item');
+      if (it) this.clearDragVisuals(it);
+      try {
+        e.dataTransfer.dropEffect = 'move';
+      } catch (err) { }
+      document.querySelectorAll('.drop-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
+      const zone = e.target.closest('.drop-zone, .source-zone');
+      if (zone) zone.classList.add('drag-over');
+      const zoneName = this.zoneName(zone);
+      console.info('ProblemSolver: dragover at', e.clientX + ',' + e.clientY, 'over', zoneName);
+      try {
+        this.utils.debugLog(`dragover at (${e.clientX},${e.clientY}) over ${zoneName}`);
+      } catch (e) { }
+    } catch (err) { }
+  }
 
-  document.addEventListener('dragover', function(e) {
+  _onDrop(e) {
     e.preventDefault();
-    try { e.dataTransfer.dropEffect = 'move'; } catch(err) {}
-    document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
-    const zone = e.target.closest('.drop-zone, .source-zone');
-    if (zone) zone.classList.add('drag-over');
-    const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-    console.info('ProblemSolver: dragover at', e.clientX + ',' + e.clientY, 'over', zoneName);
-    try { self.debugLog && self.debugLog(`dragover at (${e.clientX},${e.clientY}) over ${zoneName}`); } catch(e) {}
-  });
-
-  document.addEventListener('drop', function(e) {
-    e.preventDefault();
-    document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
+    document.querySelectorAll('.drop-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
 
     let zone = e.target.closest('.drop-zone, .source-zone');
     if (!zone) {
-      // if not on a drop-zone or source area, try to resolve the source container under the point
       const el = document.elementFromPoint(e.clientX, e.clientY);
       if (el) {
         const src = el.closest('.source-zone');
@@ -560,282 +718,119 @@ export class ProblemSolver {
       if (!zone) return;
     }
 
-    const value = e.dataTransfer.getData('text/plain');
-    const originalLabel = e.dataTransfer.getData('text/label');
-    const tempId = e.dataTransfer.getData('text/id');
-    const sourceZoneId = e.dataTransfer.getData('text/sourceZoneId') || 'unknown';
-
-    const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-    console.info('ProblemSolver: drop', originalLabel, value, 'on', zoneName, 'at', e.clientX + ',' + e.clientY);
-    try { self.debugLog && self.debugLog(`drop at (${e.clientX},${e.clientY}) on ${zoneName}`); } catch(e) {}
-    self.handleDrop(zone, value, originalLabel, tempId, sourceZoneId);
-  });
-
-  // Pointer (touch) based dragging for mobile/tablet
-  let active = null;
-  let ghost = null;
-  let offsetX = 0, offsetY = 0;
-
-  const onPointerMove = (ev) => {
-    if (!active || !ghost) return;
-    ghost.style.left = (ev.clientX - offsetX) + 'px';
-    ghost.style.top = (ev.clientY - offsetY) + 'px';
-    document.querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    const zone = el && el.closest ? el.closest('.drop-zone, .source-zone') : null;
-    if (zone) zone.classList.add('drag-over');
-    const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-    console.info('ProblemSolver: pointermove at', ev.clientX + ',' + ev.clientY, 'over', zoneName);
-    try { self.debugLog && self.debugLog(`pointermove at (${ev.clientX},${ev.clientY}) over ${zoneName}`); } catch(e) {}
-  };
-
-  const onPointerUp = (ev) => {
-    if (!active) return;
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    let zone = el && el.closest ? el.closest('.drop-zone, .source-zone') : null;
-
-    document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
-
-    // fallback: try to find source zone directly under the point
-    if (!zone && el) zone = el.closest('.source-zone') || null;
-
-    const { value, originalLabel, tempId, sourceZoneId } = active.data;
-
-    const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-    console.info('ProblemSolver: pointerup at', ev.clientX + ',' + ev.clientY, 'on', zoneName);
-    try { self.debugLog && self.debugLog(`pointerup at (${ev.clientX},${ev.clientY}) on ${zoneName}`); } catch(e) {}
-    self.handleDrop(zone, value, originalLabel, tempId, sourceZoneId);
-
-    if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-    if (active.elem) {
-      active.elem.style.opacity = '';
-      active.elem.classList.remove('dragging');
-    }
-    active = null;
-    ghost = null;
-
-    document.removeEventListener('pointermove', onPointerMove);
-    document.removeEventListener('pointerup', onPointerUp);
-  };
-
-  document.addEventListener('pointerdown', function(e) {
-    const item = e.target.closest('.drag-item');
-    if (!item) return;
-
-    // Handle touch and pen; leave mouse to native drag
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-
-    e.preventDefault();
-
-    const value = item.dataset.value || item.dataset.formula || '?';
-    const originalLabel = item.dataset.originalLabel || item.textContent.trim();
-    const tempId = item.dataset.tempDragId || `drag-${Date.now()}`;
-    item.dataset.tempDragId = tempId;
-
-    const sourceZone = item.closest('.drop-zone, .source-zone');
-    const sourceZoneId = sourceZone ? (sourceZone.closest('.source-zone') ? 'source' : (sourceZone.dataset.var || 'unknown')) : 'source';
-
-    active = { elem: item, data: { value, originalLabel, tempId, sourceZoneId } };
-    console.info('ProblemSolver: pointerdown pick up', originalLabel, 'from', sourceZoneId);
-    try { self.announce && self.announce(`Picked up ${originalLabel}`); } catch(e) {}
-
-    // Create ghost element to follow finger
-    ghost = item.cloneNode(true);
-    ghost.style.position = 'fixed';
-    ghost.style.left = (e.clientX - 20) + 'px';
-    ghost.style.top = (e.clientY - 12) + 'px';
-    ghost.style.pointerEvents = 'none';
-    ghost.style.opacity = '0.95';
-    ghost.style.zIndex = 10000;
-    document.body.appendChild(ghost);
-
-    const rect = item.getBoundingClientRect();
-    offsetX = e.clientX - rect.left;
-    offsetY = e.clientY - rect.top;
-
-    item.style.opacity = '0.5';
-
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-  });
-
-  // Synthetic mouse fallback: mousedown -> small move -> synthetic drag (for desktops where native dragstart is unreliable)
-  (function(){
-    let mouseSynthetic = null;
-
-    const startSyntheticDrag = (item, ev) => {
-      if (window.problemSolverNativeDragActive) return;
-      if (mouseSynthetic && mouseSynthetic.active) return;
-
-      const value = item.dataset.value || item.dataset.formula || '?';
-      const originalLabel = item.dataset.originalLabel || item.textContent.trim();
-      const tempId = item.dataset.tempDragId || `drag-${Date.now()}`;
-      item.dataset.tempDragId = tempId;
-      const sourceZone = item.closest('.drop-zone, .source-zone');
-      const sourceZoneId = sourceZone ? (sourceZone.closest('.source-zone') ? 'source' : (sourceZone.dataset.var || 'unknown')) : 'source';
-
-      const ghostEl = item.cloneNode(true);
-      ghostEl.style.position = 'fixed';
-      ghostEl.style.left = (ev.clientX - 20) + 'px';
-      ghostEl.style.top = (ev.clientY - 12) + 'px';
-      ghostEl.style.pointerEvents = 'none';
-      ghostEl.style.opacity = '0.95';
-      ghostEl.style.zIndex = 10000;
-      document.body.appendChild(ghostEl);
-
-      item.style.opacity = '0.5';
-      item.classList.add('dragging');
-
-      mouseSynthetic = {
-        active: true,
-        elem: item,
-        ghost: ghostEl,
-        data: { value, originalLabel, tempId, sourceZoneId },
-        moveHandler: null,
-        upHandler: null
-      };
-
-      mouseSynthetic.moveHandler = function(mv) {
-        if (!mouseSynthetic.active) return;
-        mouseSynthetic.ghost.style.left = (mv.clientX - 20) + 'px';
-        mouseSynthetic.ghost.style.top = (mv.clientY - 12) + 'px';
-        document.querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
-        const el = document.elementFromPoint(mv.clientX, mv.clientY);
-        const zone = el && el.closest ? el.closest('.drop-zone, .source-zone') : null;
-        if (zone) zone.classList.add('drag-over');
-        const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-        console.info('ProblemSolver: synthetic mousemove at', mv.clientX + ',' + mv.clientY, 'over', zoneName);
-        try { self.debugLog && self.debugLog(`synthetic mousemove at (${mv.clientX},${mv.clientY}) over ${zoneName}`); } catch(e) {}
-      };
-
-      mouseSynthetic.upHandler = function(mu) {
-        if (!mouseSynthetic.active) return;
-        const el = document.elementFromPoint(mu.clientX, mu.clientY);
-        let zone = el && el.closest ? el.closest('.drop-zone, .source-zone') : null;
-        if (!zone && el) zone = el.closest('.source-zone') || null;
-        const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-        console.info('ProblemSolver: synthetic mouseup at', mu.clientX + ',' + mu.clientY, 'on', zoneName);
-        try { self.debugLog && self.debugLog(`synthetic mouseup at (${mu.clientX},${mu.clientY}) on ${zoneName}`); } catch(e) {}
-        self.handleDrop(zone, mouseSynthetic.data.value, mouseSynthetic.data.originalLabel, mouseSynthetic.data.tempId, mouseSynthetic.data.sourceZoneId);
-
-        if (mouseSynthetic.ghost && mouseSynthetic.ghost.parentNode) mouseSynthetic.ghost.parentNode.removeChild(mouseSynthetic.ghost);
-        if (mouseSynthetic.elem) {
-          mouseSynthetic.elem.style.opacity = '';
-          mouseSynthetic.elem.classList.remove('dragging');
-        }
-
-        document.removeEventListener('mousemove', mouseSynthetic.moveHandler);
-        document.removeEventListener('mouseup', mouseSynthetic.upHandler);
-        mouseSynthetic.active = false;
-        mouseSynthetic = null;
-      };
-
-      document.addEventListener('mousemove', mouseSynthetic.moveHandler);
-      document.addEventListener('mouseup', mouseSynthetic.upHandler);
-    };
-
-    // Start tracking on mousedown; begin synthetic drag after small move threshold
-    document.addEventListener('mousedown', function(e) {
-      if (e.button !== 0) return;
-      const item = e.target.closest('.drag-item');
-      if (!item) return;
-      if (window.problemSolverNativeDragActive) return;
-
-      const sx = e.clientX, sy = e.clientY;
-      const onMove = function(mv) {
-        if (Math.hypot(mv.clientX - sx, mv.clientY - sy) > 6) {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          startSyntheticDrag(item, mv);
-        }
-      };
-      const onUp = function() {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  })();
-
-  // Ensure drag-items are initialized when inserted (handles re-renders)
-  const itemDragStartHandler = function(e) {
-    const item = this;
-    const originalLabel = item.dataset.originalLabel || item.textContent.trim();
-    const value = item.dataset.value || item.dataset.formula || '?';
-    const id = item.dataset.tempDragId || `drag-${Date.now()}`;
-    const sourceZone = item.closest('.drop-zone, .source-zone');
-    const sourceZoneId = sourceZone ? (sourceZone.closest('.source-zone') ? 'source' : (sourceZone.dataset.var || 'unknown')) : 'source';
+    let value = '?', originalLabel = '', tempId = '', sourceZoneId = 'unknown';
     try {
       if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', value);
-        e.dataTransfer.setData('text/label', originalLabel);
-        e.dataTransfer.setData('text/id', id);
-        e.dataTransfer.setData('text/sourceZoneId', sourceZoneId);
+        value = e.dataTransfer.getData('text/plain') || '?';
+        originalLabel = e.dataTransfer.getData('text/label') || '';
+        tempId = e.dataTransfer.getData('text/id') || '';
+        sourceZoneId = e.dataTransfer.getData('text/sourceZoneId') || 'unknown';
       }
-    } catch (err) { /* ignore */ }
-    item.style.opacity = '0.5';
-    try { self.announce && self.announce(`Picked up ${originalLabel}`); } catch(e) {}
-  };
+    } catch (err) { }
 
-  const ensureItems = () => {
+    const zoneName = this.zoneName(zone);
+    console.info('ProblemSolver: drop', originalLabel, value, 'on', zoneName, 'at', e.clientX + ',' + e.clientY);
+    try {
+      this.utils.debugLog(`drop at (${e.clientX},${e.clientY}) on ${zoneName}`);
+    } catch (e) { }
+    this.handleDrop(zone, value, originalLabel, tempId, sourceZoneId);
+  }
+
+  _onDragEnd(e) {
+    window.problemSolverNativeDragActive = false;
+    const it = e.target && e.target.closest && e.target.closest('.drag-item');
+    if (it) this.clearDragVisuals(it);
+    try {
+      this.utils.debugLog(`dragend: ${it?.dataset?.originalLabel || ''}`);
+    } catch (e) { }
+  }
+
+  ensureItemsInit() {
+    const self = this;
+    const itemDragStartHandler = function (/** @type {{ dataTransfer: any; }} */ e) {
+      const item = this;
+      const originalLabel = item.dataset.originalLabel || item.textContent.trim();
+      const value = item.dataset.value || item.dataset.formula || '?';
+      const id = item.dataset.tempDragId || `drag-${Date.now()}`;
+      const sourceZoneId = self.getSourceZoneId(item);
+      if (e.dataTransfer) {
+        self.safeSetDataTransfer(e.dataTransfer, 'text/plain', value);
+        self.safeSetDataTransfer(e.dataTransfer, 'text/label', originalLabel);
+        self.safeSetDataTransfer(e.dataTransfer, 'text/id', id);
+        self.safeSetDataTransfer(e.dataTransfer, 'text/sourceZoneId', sourceZoneId);
+      }
+      item.style.opacity = '0.5';
+      try {
+        // play a tap SFX on drag start
+        self.playSfx(self.tapSfx);
+      } catch (e) { }
+      try {
+        self.utils.announce(`Picked up ${originalLabel}`);
+      } catch (e) { }
+    };
+
     const newly = document.querySelectorAll('.drag-item:not([data-ps-init])');
-    newly.forEach(item => {
-      item.setAttribute('data-ps-init','1');
+    newly.forEach((item) => {
+      item.setAttribute('data-ps-init', '1');
       item.draggable = true;
       if (!item.hasAttribute('tabindex')) item.tabIndex = 0;
       if (!item.dataset.originalLabel) item.dataset.originalLabel = item.textContent.trim();
-      if (!item.dataset.tempDragId) item.dataset.tempDragId = `drag-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-      item.addEventListener('dragstart', itemDragStartHandler);
-      item.addEventListener('dragend', function() {
-        this.style.opacity = '';
-        this.classList.remove('dragging');
-        document.querySelectorAll('.drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
-        try { self.debugLog && self.debugLog(`dragend: ${this.dataset.originalLabel || this.textContent.trim()}`); } catch(e) {}
+      if (!item.dataset.tempDragId) item.dataset.tempDragId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      item.addEventListener('dragstart', /** @type {any} */ (itemDragStartHandler));
+      item.addEventListener('dragend', function () {
+        // dragend shouldn't play drop SFX by itself — drop SFX is played only on successful drops in handleDrop
+        self.clearDragVisuals(this);
+        try {
+          self.utils.debugLog(`dragend: ${this.dataset.originalLabel || this.textContent.trim()}`);
+        } catch (e) { }
       });
-      // mousedown for debug fallback / detection
-      item.addEventListener('mousedown', function(ev){ try { self.debugLog && self.debugLog(`mousedown on ${this.dataset.originalLabel || this.textContent.trim()} (button ${ev.button})`); } catch(e) {} });
+      item.addEventListener('mousedown', function (ev) {
+        try {
+          self.utils.debugLog(`mousedown on ${this.dataset.originalLabel || this.textContent.trim()} (button ${ev.button})`);
+        } catch (e) { }
+      });
     });
     const total = document.querySelectorAll('.drag-item[data-ps-init="1"]').length;
     console.info('ProblemSolver: ensureItems run. new:', newly.length, 'total initialized:', total);
     if (newly.length > 0) {
-      try { self.debugLog && self.debugLog(`ensureItems initialized ${newly.length} items`); } catch(e) {}
+      try {
+        this.utils.debugLog(`ensureItems initialized ${newly.length} items`);
+      } catch (e) { }
     }
-    };
+  }
 
-  // Observe DOM changes under the panel so newly rendered items are initialized
-  const panel = document.getElementById('panelContent');
-  if (panel) {
+  attachMutationObserver() {
+    const panel = document.getElementById('panelContent');
+    if (!panel) return;
     let ensureDebounceTimer = null;
-    const mo = new MutationObserver((records) => {
-      // Only trigger ensureItems when added nodes include drag-items (or contain them)
-      const should = Array.from(records).some(r => {
-        return Array.from(r.addedNodes).some(node => {
+    this._mo = new MutationObserver((records) => {
+      const should = Array.from(records).some((r) => {
+        return Array.from(r.addedNodes).some((node) => {
           if (node.nodeType !== 1) return false;
           try {
             if (node.matches && node.matches('.drag-item')) return true;
             if (node.querySelector && node.querySelector('.drag-item')) return true;
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            /* ignore */
+          }
           return false;
         });
       });
       if (should) {
         if (ensureDebounceTimer) clearTimeout(ensureDebounceTimer);
-        ensureDebounceTimer = setTimeout(() => { ensureItems(); ensureDebounceTimer = null; }, 120);
+        ensureDebounceTimer = setTimeout(() => {
+          this.ensureItemsInit();
+          ensureDebounceTimer = null;
+        }, 120);
       }
     });
-    mo.observe(panel, { childList: true, subtree: true });
+    this._mo.observe(panel, { childList: true, subtree: true });
     console.info('ProblemSolver: MutationObserver attached to panelContent (filtered)');
   }
 
-  // Run once now
-  ensureItems();
-  console.info('ProblemSolver: setupDragDrop completed');
-}
-
   // Ensure placeholder text and dataset state are consistent for empty zones
   updateEmptyZones() {
-    document.querySelectorAll('.drop-zone[data-var], .drop-zone[data-target]').forEach(zone => {
+    document.querySelectorAll('.drop-zone[data-var], .drop-zone[data-target]').forEach((zone) => {
       const target = zone.dataset.var || zone.dataset.target;
       const hasItem = zone.querySelector('.drag-item');
       if (!hasItem) {
@@ -847,279 +842,279 @@ export class ProblemSolver {
     });
   }
 
-  // Unified drop logic used by both native and pointer-based drags
   handleDrop(zone, value, originalLabel, tempId, sourceZoneId) {
-    if (!zone) return;
-    const zoneName = zone ? (zone.dataset.var || zone.dataset.target || (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')) : 'none';
-    console.info('ProblemSolver: handleDrop target', zoneName, 'value', value, 'from', sourceZoneId, 'tempId', tempId);
-    try { this.debugLog && this.debugLog(`handleDrop target ${zoneName} value ${value} from ${sourceZoneId}`); } catch(e) {}
+  if (!zone) {
+    console.info('ProblemSolver: drop failed — no drop zone at drop point');
+    try { this.utils.debugLog('Drop failed: no drop zone detected at drop point'); } catch (e) {}
+    return;
+  }
+  
+  const zoneName = zone
+    ? zone.dataset.var ||
+      zone.dataset.target ||
+      (zone.classList && zone.classList.contains('source-zone') ? 'source' : 'unknown')
+    : 'none';
+    
+  console.info(
+    'ProblemSolver: handleDrop target',
+    zoneName,
+    'value',
+    value,
+    'from',
+    sourceZoneId,
+    'tempId',
+    tempId
+  );
+  
+  try {
+    this.utils.debugLog(`handleDrop target ${zoneName} value ${value} from ${sourceZoneId}`);
+  } catch (e) {}
 
-    // If the item originated in a variable zone, clear only the previous drag-item
-    if (sourceZoneId && sourceZoneId !== 'unknown' && sourceZoneId !== 'source') {
-      const prevZone = document.querySelector(`[data-var="${sourceZoneId}"]`);
-      if (prevZone) {
-        const prevChild = prevZone.querySelector('.drag-item');
-        if (prevChild) {
-          // only remove if it matches the moved item (by temp id or label/value) to avoid accidental deletions
-          if (prevChild.dataset.tempDragId === tempId || prevChild.dataset.originalLabel === originalLabel || prevChild.dataset.value === value) {
-            prevChild.remove();
-            prevZone.dataset.value = '?';
-            delete prevZone.dataset.label;
-            prevZone.innerHTML = `${sourceZoneId.toUpperCase()} = ?`;
-          } else {
-            console.info('ProblemSolver: handleDrop did not remove prevChild — mismatch', prevChild.dataset.tempDragId, tempId, prevChild.dataset.originalLabel, originalLabel);
-          }
+  // If the item originated in a variable zone, identify the previous drag-item but do NOT remove it yet
+  let _prevChildToRemove = null;
+  if (sourceZoneId && sourceZoneId !== 'unknown' && sourceZoneId !== 'source') {
+    const prevZone = document.querySelector(`[data-var="${sourceZoneId}"]`);
+    if (prevZone) {
+      const prevChild = prevZone.querySelector('.drag-item');
+      if (prevChild) {
+        // mark for removal only if it matches the moved item
+        if (
+          prevChild.dataset.tempDragId === tempId ||
+          prevChild.dataset.originalLabel === originalLabel ||
+          prevChild.dataset.value === value
+        ) {
+          _prevChildToRemove = { prevChild, prevZone, sourceZoneId };
+        } else {
+          console.info(
+            'ProblemSolver: handleDrop did not mark prevChild for removal — mismatch',
+            prevChild.dataset.tempDragId,
+            tempId,
+            prevChild.dataset.originalLabel,
+            originalLabel
+          );
         }
       }
     }
-
-    // Remove the draggable source item if it exists (from source area)
-    const sourceItem = document.querySelector(`[data-temp-drag-id="${tempId}"]`);
-    if (sourceItem) {
-      if (sourceItem.dataset.tempDragId === tempId) {
-        sourceItem.remove();
-      } else {
-        console.info('ProblemSolver: source item found but tempId mismatch', sourceItem.dataset.tempDragId, tempId);
-      }
-    }
-
-    // If the destination already had an item, move it back to the source panel
-    const existingValue = zone.querySelector('.drag-item');
-    if (existingValue && zone.closest('.source-zone') === null) {
-      const sourceContainer = document.querySelector('.source-zone');
-      if (sourceContainer) {
-          const restoredItem = existingValue.cloneNode(true);
-        restoredItem.dataset.originalLabel = existingValue.dataset.originalLabel || existingValue.textContent.trim();
-        restoredItem.dataset.value = existingValue.dataset.value;
-        restoredItem.dataset.label = existingValue.dataset.label || existingValue.textContent.trim();
-        restoredItem.dataset.tempDragId = `drag-${Date.now()}`;
-        restoredItem.draggable = true;
-        restoredItem.tabIndex = 0;
-        restoredItem.setAttribute('role','button');
-        restoredItem.setAttribute('aria-grabbed','false');
-        restoredItem.classList.add('drag-item','source-item');
-        sourceContainer.appendChild(restoredItem);
-      }
-    }
-
-    // If dropped into a variable drop-zone, display the variable and add the drag item
-    const targetVar = zone.dataset.var || zone.dataset.target;
-    if (targetVar && !zone.closest('.source-zone')) {
-      zone.innerHTML = `${targetVar.toUpperCase()} = `;
-      zone.dataset.value = value;
-      zone.dataset.label = originalLabel;
-      const displayItem = document.createElement('div');
-      displayItem.className = 'drag-item';
-      displayItem.draggable = true;
-      displayItem.dataset.value = value;
-      displayItem.dataset.originalLabel = originalLabel;
-      displayItem.dataset.label = originalLabel;
-      displayItem.dataset.tempDragId = `drag-${Date.now()}`;
-      displayItem.tabIndex = 0;
-      displayItem.setAttribute('role','button');
-      displayItem.setAttribute('aria-grabbed','false');
-      displayItem.textContent = originalLabel;
-      displayItem.classList.add('drag-item','placed');
-      zone.appendChild(displayItem);
-      try { this.announce(`Placed ${originalLabel} into ${targetVar.toUpperCase()}`); } catch(e) {}
-    } else {
-      // Dropped into a source zone: restore a drag-item there
-      const sourceContainer = zone.closest('.source-zone') || document.querySelector('.source-zone');
-      if (sourceContainer) {
-        const restored = document.createElement('div');
-        restored.className = 'drag-item';
-        restored.draggable = true;
-        restored.dataset.value = value;
-        restored.dataset.originalLabel = originalLabel;
-        restored.dataset.label = originalLabel;
-        restored.dataset.tempDragId = `drag-${Date.now()}`;
-        restored.tabIndex = 0;
-        restored.setAttribute('role','button');
-        restored.setAttribute('aria-grabbed','false');
-        restored.textContent = originalLabel;
-        restored.classList.add('source-item');
-        sourceContainer.appendChild(restored);
-        try { this.announce(`Restored ${originalLabel} to source`); } catch(e) {}
-      }
-    }
-
-    this.updateEmptyZones();
   }
 
-  // Mute controls
-  toggleMute() {
-    this.isMuted = !this.isMuted;
-    localStorage.setItem('physicsMuted', this.isMuted ? 'true' : 'false');
-    this.applyMute();
-    const btn = document.getElementById('muteToggle');
-    if (btn) {
-      btn.textContent = this.isMuted ? '🔇' : '🔊';
-      btn.setAttribute('aria-pressed', this.isMuted ? 'true' : 'false');
-    }
-    this.announce(this.isMuted ? 'Music muted' : 'Music unmuted');
-  }
-  applyMute() {
-    if (this.backgroundMusic) this.backgroundMusic.muted = !!this.isMuted;
-    if (this.correctSound) this.correctSound.muted = !!this.isMuted;
-    if (this.wrongSound) this.wrongSound.muted = !!this.isMuted;
-  }
-
-  // Announcements: helper + toggle
-  announce(msg, assertive = false) {
+  // Find the draggable source item if it exists but do NOT remove yet
+  const sourceItem = document.querySelector(`[data-temp-drag-id="${tempId}"]`);
+  let _sourceItemToRemove = null;
+  if (sourceItem) {
     try {
-      if (!this.announcementsEnabled) return;
-      const el = document.getElementById('psLive');
-      if (!el) return;
-      el.setAttribute('aria-live', assertive ? 'assertive' : 'polite');
-      el.textContent = '';
-      setTimeout(() => { el.textContent = msg; }, 20);
+      const targetSource = zone.closest('.source-zone');
+      const sourceItemSource = sourceItem.closest('.source-zone');
+      // If dropping into a non-source destination, schedule the original source item for removal
+      if (!targetSource) {
+        _sourceItemToRemove = sourceItem;
+      } else if (sourceItemSource !== targetSource) {
+        // if sourceItem lives in a different source container, schedule for removal
+        _sourceItemToRemove = sourceItem;
+      } else {
+        // item already present in the target source container — do not remove
+        console.info('ProblemSolver: sourceItem present in target source container — not removing');
+      }
     } catch (e) {
-      console.warn('Announce failed:', e);
+      try { console.info('ProblemSolver: sourceItem check failed', e); } catch (err) {}
     }
   }
 
-  toggleAnnouncements() {
-    this.announcementsEnabled = !this.announcementsEnabled;
-    localStorage.setItem('physicsAnnouncements', this.announcementsEnabled ? 'true' : 'false');
-    const btn = document.getElementById('announceToggle');
-    if (btn) {
-      btn.textContent = this.announcementsEnabled ? 'Aa' : 'aA';
-      btn.setAttribute('aria-pressed', this.announcementsEnabled ? 'true' : 'false');
+  // If the destination already had an item, move it back to the source panel
+  const existingValue = zone.querySelector('.drag-item');
+  if (existingValue && zone.closest('.source-zone') === null) {
+    const sourceContainer = document.querySelector('.source-zone');
+    if (sourceContainer) {
+      const restoredItem = existingValue.cloneNode(true);
+      restoredItem.dataset.originalLabel = existingValue.dataset.originalLabel || existingValue.textContent.trim();
+      restoredItem.dataset.value = existingValue.dataset.value;
+      restoredItem.dataset.label = existingValue.dataset.label || existingValue.textContent.trim();
+      restoredItem.dataset.tempDragId = `drag-${Date.now()}`;
+      restoredItem.draggable = true;
+      restoredItem.tabIndex = 0;
+      restoredItem.setAttribute('role', 'button');
+      restoredItem.setAttribute('aria-grabbed', 'false');
+      restoredItem.classList.add('drag-item', 'source-item');
+      sourceContainer.appendChild(restoredItem);
+      try { this.playSfx(this.dropSfx); } catch (e) {}
+
+      // If we moved an existing variable-item back to source, remove original variable's item
+      try {
+        if (_prevChildToRemove && _prevChildToRemove.prevChild && _prevChildToRemove.prevChild.parentNode) {
+          _prevChildToRemove.prevChild.remove();
+          _prevChildToRemove.prevZone.dataset.value = '?';
+          delete _prevChildToRemove.prevZone.dataset.label;
+          _prevChildToRemove.prevZone.innerHTML = `${_prevChildToRemove.sourceZoneId.toUpperCase()} = ?`;
+          _prevChildToRemove = null;
+        }
+      } catch (e) {}
+
+      // Remove the original source item if scheduled
+      try {
+        if (_sourceItemToRemove && _sourceItemToRemove.parentNode) {
+          _sourceItemToRemove.remove();
+          _sourceItemToRemove = null;
+        }
+      } catch (e) {}
     }
-    if (this.announcementsEnabled) this.announce('Announcements enabled');
+    return; // Exit early after handling existing item
   }
 
-  // Debug logging helper (dedup repeated messages with a repeat counter and rate limiting)
-  debugLog(msg) {
-    if (!this.debugMode) return;
+  // No existing item - handle new drop
+  const targetVar = zone.dataset.var || zone.dataset.target;
+  
+  if (targetVar && zone.closest('.source-zone') === null) {
+    // Dropped into variable zone
+    const displayItem = document.createElement('div');
+    displayItem.draggable = true;
+    displayItem.dataset.value = value;
+    displayItem.dataset.originalLabel = originalLabel;
+    displayItem.dataset.label = originalLabel;
+    displayItem.dataset.tempDragId = `drag-${Date.now()}`;
+    displayItem.tabIndex = 0;
+    displayItem.setAttribute('role', 'button');
+    displayItem.setAttribute('aria-grabbed', 'false');
+    displayItem.textContent = originalLabel;
+    displayItem.classList.add('drag-item');
+    zone.appendChild(displayItem);
+    try { this.playSfx(this.dropSfx); } catch (e) {}
+    try { this.utils.announce(`Placed ${originalLabel} into ${targetVar.toUpperCase()}`); } catch (e) {}
+
+    // Drop succeeded: cleanup queued items
     try {
-      const ts = new Date().toLocaleTimeString();
-      console.debug(`[PS DEBUG ${ts}]`, msg);
-
-      // Track last message and repeat count immediately (so repeat count increases even while throttled)
-      if (this._debugLastMessage === msg) {
-        this._debugRepeatCount = (this._debugRepeatCount || 1) + 1;
-      } else {
-        this._debugLastMessage = msg;
-        this._debugRepeatCount = 1;
+      if (_prevChildToRemove && _prevChildToRemove.prevChild && _prevChildToRemove.prevChild.parentNode) {
+        _prevChildToRemove.prevChild.remove();
+        _prevChildToRemove.prevZone.dataset.value = '?';
+        delete _prevChildToRemove.prevZone.dataset.label;
+        _prevChildToRemove.prevZone.innerHTML = `${_prevChildToRemove.sourceZoneId.toUpperCase()} = ?`;
+        _prevChildToRemove = null;
       }
+    } catch (e) {}
 
-      // Prepare pending state for DOM update
-      this._debugPending = { msg: this._debugLastMessage, count: this._debugRepeatCount, ts };
-
-      const RATE_MS = 250; // throttle DOM updates to at most once per this interval
-      const ov = document.getElementById('psDebugOverlay');
-      // If overlay does not exist yet, bail — state is tracked in _debugPending for when overlay appears
-      if (!ov) return;
-
-      // function that actually updates the overlay DOM
-      const doUpdate = () => {
-        try {
-          ov.classList.remove('hidden');
-          const pending = this._debugPending || { msg: this._debugLastMessage, count: this._debugRepeatCount, ts };
-          const text = pending.count > 1 ? `${pending.ts} — ${pending.msg} (${pending.count}x)` : `${pending.ts} — ${pending.msg}`;
-          const first = ov.firstChild;
-
-          if (first && first.textContent && first.textContent.indexOf(pending.msg) !== -1) {
-            // same message at top — update its counter/text
-            first.textContent = text;
-          } else {
-            // new message — insert at top
-            const line = document.createElement('div');
-            line.textContent = text;
-            ov.insertBefore(line, ov.firstChild);
-            // limit children
-            while (ov.childElementCount > 60) ov.removeChild(ov.lastChild);
-          }
-
-          this._debugLastUpdateTime = Date.now();
-        } catch (e) { /* ignore DOM update errors */ }
-      };
-
-      // Throttle logic: schedule or run immediately
-      const now = Date.now();
-      const last = this._debugLastUpdateTime || 0;
-      const elapsed = now - last;
-      if (!this._debugTimer && elapsed >= RATE_MS) {
-        // allowed to run immediately
-        doUpdate();
-      } else {
-        // schedule an update for when the window has passed RATE_MS since last update
-        if (this._debugTimer) clearTimeout(this._debugTimer);
-        const wait = Math.max(0, RATE_MS - elapsed);
-        this._debugTimer = setTimeout(() => { this._debugTimer = null; doUpdate(); }, wait);
+    try {
+      if (_sourceItemToRemove && _sourceItemToRemove.parentNode) {
+        _sourceItemToRemove.remove();
+        _sourceItemToRemove = null;
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
+    
+  } else {
+    // Dropped into source zone
+    const sourceContainer = zone.closest('.source-zone') || document.querySelector('.source-zone');
+    if (sourceContainer) {
+      // Prevent duplicate items
+      if ([...sourceContainer.children].some(child => 
+        child.classList && child.classList.contains('drag-item') && child.textContent === originalLabel)) {
+        console.info('ProblemSolver: drop failed — duplicate item already present in source zone');
+        try { this.utils.debugLog(`Drop failed: duplicate source item ${originalLabel}`); } catch (e) {}
+        return;
+      }
+      
+      // Prevent duplicate in variable zone (edge case check)
+      if (zone.querySelector('.drag-item')) return;
+      
+      const restored = document.createElement('div');
+      restored.className = 'drag-item source-item';
+      restored.draggable = true;
+      restored.dataset.value = value;
+      restored.dataset.originalLabel = originalLabel;
+      restored.dataset.label = originalLabel;
+      restored.dataset.tempDragId = `drag-${Date.now()}`;
+      restored.tabIndex = 0;
+      restored.setAttribute('role', 'button');
+      restored.setAttribute('aria-grabbed', 'false');
+      restored.textContent = originalLabel;
+      sourceContainer.appendChild(restored);
+      try { this.playSfx(this.dropSfx); } catch (e) {}
+      try { this.utils.announce(`Restored ${originalLabel} to source`); } catch (e) {}
+    }
   }
 
+  this.updateEmptyZones();
+}
 
 
   /* CHECKING SYSTEM */
   checkStep1() {
-  const zones = document.querySelectorAll('.drop-zone[data-var]');
-  const correct = Array.from(zones).every(zone => {
-    const item = zone.querySelector('.drag-item');
-    const expected = this.problem.givens.find(g => g.target === zone.dataset.var);
-   
-    if (expected) return item?.dataset.value === expected.value;
-    return item?.dataset.value === '?';
-  });
- 
-  if (correct) {
-    this.playSound(this.correctSound);
-    this.updateScore(30);
-    this.solvedVariables = this.problem.givens.map(g => ({
-      value: g.value,
-      target: g.target,
-      label: g.label
-    }));
-    this.announce('Step 1 complete. Proceed to Step 2.');
-    this.nextStep();
-  } else {
-    this.playSound(this.wrongSound);
-    this.updateScore(0, true);
+    const zones = document.querySelectorAll('.drop-zone[data-var]');
+    const correct = Array.from(zones).every((zone) => {
+      const item = zone.querySelector('.drag-item');
+      const expected = this.problem.givens.find((g) => g.target === zone.dataset.var);
+
+      if (expected) return item?.dataset.value === expected.value;
+      return item?.dataset.value === '?';
+    });
+
+    if (correct) {
+      this.utils.playSound(this.correctSound);
+      this.utils.updateScore(30);
+      this.solvedVariables = this.problem.givens.map((g) => ({
+        value: g.value,
+        target: g.target,
+        label: g.label,
+      }));
+      this.utils.announce('Step 1 complete. Proceed to Step 2.');
+      this.nextStep();
+    } else {
+      this.utils.playSound(this.wrongSound);
+      this.updateScore(0, true);
+    }
   }
-}
   checkStep2() {
-  const zones = document.querySelectorAll('.drop-zone[data-target]');
-  const correct = Array.from(zones).every(zone => {
-    const item = zone.querySelector('.drag-item');
-    const targetVar = zone.dataset.target;
-    const expectedFormula = this.problem.formulas.find(f => f.target === targetVar);
-   
-    return item && item.dataset.target === expectedFormula?.target;
-  });
- 
-  if (correct) {
-    this.playSound(this.correctSound);
-    this.updateScore(30);
-    this.announce('Step 2 complete. Proceed to Step 3.');
-    this.nextStep();
-  } else {
-    this.playSound(this.wrongSound);
-    this.updateScore(0, true);
+    const zones = document.querySelectorAll('.drop-zone[data-target]');
+    let allCorrect = true;
+    zones.forEach((zone) => {
+      const item = zone.querySelector('.drag-item');
+      const targetVar = zone.dataset.target;
+      const expectedFormula = this.problem.formulas.find((f) => f.target === targetVar);
+      if (!item || !expectedFormula) {
+        allCorrect = false;
+        return;
+      }
+      // Accept match if formula string or label matches
+      const itemFormula = item.dataset.formula || item.textContent.trim();
+      if (
+        (item.dataset.target && item.dataset.target === expectedFormula.target) ||
+        (itemFormula === expectedFormula.formula) ||
+        (itemFormula === expectedFormula.label)
+      ) {
+        // correct
+      } else {
+        allCorrect = false;
+      }
+    });
+
+    if (allCorrect) {
+      this.utils.playSound(this.correctSound);
+      this.utils.updateScore(30);
+      this.utils.announce('Step 2 complete. Proceed to Step 3.');
+      this.nextStep();
+    } else {
+      this.utils.playSound(this.wrongSound);
+      // pass (score, points, isPenalty)
+      this.utils.updateScore(0, 0, true);
+      this.utils.debugLog('Step 2 check failed: at least one formula did not match.');
+    }
   }
-}
   checkStep3() {
     const answer = parseFloat(document.getElementById('finalAnswer')?.value);
     const currentUnknown = this.problem.unknowns?.[this.currentUnknownIndex];
     const expected = currentUnknown?.answer;
-   
+
     if (isNaN(answer)) return this.highlightWrongAnswer();
-   
+
     const tolerance = 1.0;
     if (Math.abs(answer - expected) <= tolerance) {
-      this.playSound(this.correctSound);
-      this.announce(`Correct — ${currentUnknown.target.toUpperCase()} = ${answer}`);
+      this.utils.playSound(this.correctSound);
+      this.utils.announce(`Correct — ${currentUnknown.target.toUpperCase()} = ${answer}`);
       this.solvedVariables.push({
         value: answer,
         target: currentUnknown.target,
-        label: `${answer} ${currentUnknown.target.toUpperCase()}`
+        label: `${answer} ${currentUnknown.target.toUpperCase()}`,
       });
-     
+
       this.currentUnknownIndex++;
-      this.updateScore(40);
-     
+      this.utils.updateScore(40);
+
       setTimeout(() => {
         if (this.problem.unknowns?.[this.currentUnknownIndex]) {
           this.renderCurrentStep();
@@ -1128,11 +1123,11 @@ export class ProblemSolver {
         }
       }, 800);
     } else {
-      this.playSound(this.wrongSound);
-      this.announce('Incorrect — try again', true);
+      this.utils.playSound(this.wrongSound);
+      this.utils.announce('Incorrect — try again', true);
       this.highlightWrongAnswer();
     }
-}
+  }
   highlightWrongAnswer() {
     const input = document.getElementById('finalAnswer');
     if (input) {
@@ -1144,7 +1139,7 @@ export class ProblemSolver {
       }, 1000);
     }
     this.updateScore(0, true);
-}
+  }
 
   /* SCORING SYSTEM */
   updateScore(points = 0, isPenalty = false) {
@@ -1155,17 +1150,15 @@ export class ProblemSolver {
       const timeBonus = Math.max(0.5, 3.0 - (Date.now() - this.startTime) / 10000);
       this.score += points * timeBonus;
     }
-    
-    const scoreEl = document.getElementById('scoreDisplay');
-    if (scoreEl) scoreEl.textContent = Math.round(this.score);
-  }
 
+    const scoreEl = document.getElementById('scoreDisplay');
+    if (scoreEl) scoreEl.textContent = String(Math.round(this.score));
+  }
 
   nextStep() {
     this.currentStep++;
     this.renderCurrentStep();
   }
-
 
   showCompletion() {
     this.solvedProblems.add(this.currentProblem);
@@ -1180,29 +1173,26 @@ export class ProblemSolver {
       </div>
     `;
 
-
-    localStorage.setItem('physicsHighScore', Math.max(this.highScore, this.score));
+    localStorage.setItem('physicsHighScore', String(Math.max(this.highScore, this.score)));
     this.completedProblems.push(this.currentProblem);
     localStorage.setItem('physicsProgress', JSON.stringify(this.completedProblems.slice(-10)));
-    this.announce(`Problem complete. Final score: ${Math.round(this.score)} points.`, true);
+    this.utils.announce(`Problem complete. Final score: ${Math.round(this.score)} points.`, true);
   }
-
 
   nextProblem() {
     console.log('Next problem requested...');
     this.resetProblemState();
-   
+
     this.selectRandomProblem(); // Fixed: select first, mark later
     window.dispatchEvent(new CustomEvent('problemChanged', { detail: this.problem }));
-   
+
     setTimeout(() => {
       this.renderProblemText();
       this.renderCurrentStep();
       this.startTimer();
-      this.announce(`New problem: ${this.problem.text.slice(0,80)}`);
+      this.utils.announce(`New problem: ${this.problem.text.slice(0, 80)}`);
     }, 150);
   }
-
 
   restartAll() {
     this.score = 0;
@@ -1214,19 +1204,14 @@ export class ProblemSolver {
     this.startTimer();
   }
 
-
   saveProgress() {
-  localStorage.setItem('physicsHighScore', Math.max(this.highScore, this.score));
-}
+    localStorage.setItem('physicsHighScore', String(Math.max(this.highScore, this.score)));
+  }
 }
 
-
-// Initialize
+// Initialize ProblemSolver when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, starting ProblemSolver...');
-    new ProblemSolver();
-  });
+  document.addEventListener('DOMContentLoaded', () => new ProblemSolver());
 } else {
   console.log('DOM already ready, starting ProblemSolver...');
   new ProblemSolver();
