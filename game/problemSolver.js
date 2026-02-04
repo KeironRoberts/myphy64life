@@ -1043,6 +1043,22 @@ export class ProblemSolver {
     displayItem.textContent = originalLabel;
     displayItem.classList.add('drag-item');
     zone.appendChild(displayItem);
+    // Update the variable zone to display the assigned value (remove the '?')
+    try {
+      zone.dataset.value = value;
+      zone.dataset.label = originalLabel;
+      // rebuild zone content: label + item
+      zone.innerHTML = '';
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'zone-label';
+      labelSpan.textContent = `${targetVar.toUpperCase()} = `;
+      zone.appendChild(labelSpan);
+      displayItem.classList.add('placed');
+      zone.appendChild(displayItem);
+    } catch (e) {
+      try { console.warn('ProblemSolver: failed to update variable label', e); } catch (err) {}
+    }
+
     try { this.playSfx(this.dropSfx); } catch (e) {}
     try { this.utils.announce(`Placed ${originalLabel} into ${targetVar.toUpperCase()}`); } catch (e) {}
 

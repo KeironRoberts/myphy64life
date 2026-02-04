@@ -182,7 +182,7 @@ body {
   background: rgba(76, 175, 80, 0.1);
 }
 
-..drop-zone.drag-over {
+.drop-zone.drag-over {
   border-color: #2196f3 !important;
   background: rgba(33, 150, 243, 0.15) !important;
   box-shadow: 0 0 20px rgba(33, 150, 243, 0.3) !important;
@@ -378,6 +378,11 @@ body {
 .calc-prompt {
   font-size: 18px;
   margin: 15px 0;
+}
+
+.zone-label {
+  font-weight: bold;
+  margin-right: 8px;
 }
 
 /* utility */
