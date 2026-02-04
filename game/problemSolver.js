@@ -862,7 +862,17 @@ export class ProblemSolver {
         // dragend shouldn't play drop SFX by itself — drop SFX is played only on successful drops in handleDrop
         self.clearDragVisuals(this);
         try {
-          self.utils.debugLog(`dragend: ${this.dataset.originalLabel || this.textContent.trim()}`);
+          let dest = 'unknown';
+          try {
+            const destZone = this && this.closest && (this.closest('.drop-zone[data-var], .drop-zone[data-target]') || this.closest('.source-zone'));
+            if (destZone) {
+              dest = destZone.classList && destZone.classList.contains('source-zone') ? 'source zone' : (destZone.dataset.var || destZone.dataset.target || 'unknown');
+            } else if (this.parentElement) {
+              const parZone = this.parentElement.closest('.drop-zone');
+              if (parZone) dest = parZone.dataset.var || parZone.dataset.target || (parZone.classList && parZone.classList.contains('source-zone') ? 'source zone' : 'unknown');
+            }
+          } catch (err) { /* ignore */ }
+          self.utils.debugLog(`dragend: ${this.dataset.originalLabel || this.textContent.trim()} to ${dest}`);
         } catch (e) { }
       });
       item.addEventListener('mousedown', function (ev) {
