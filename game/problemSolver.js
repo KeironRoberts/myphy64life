@@ -26,6 +26,18 @@ export class ProblemSolver {
     this.utils = new GameUtilities();
     console.debug('PS: GameUtilities initialized');
 
+    // Randomization preference (persisted)
+    try {
+      const val = localStorage.getItem('ps_randomizePlacement');
+      if (val === null) {
+        this.randomizePlacement = true; // default
+      } else {
+        this.randomizePlacement = val === '1' || val === 'true';
+      }
+    } catch (e) {
+      this.randomizePlacement = true;
+    }
+
     // Drag state for calculator
     this.isDragging = false;
     this.dragOffsetX = 0;
@@ -347,6 +359,61 @@ export class ProblemSolver {
     }
 
     setTimeout(() => this.debouncedSetupDrag(), 100);
+
+    // Optionally randomize the visual placement of source items and variable zones
+    try {
+      if (this.randomizePlacement === undefined) this.randomizePlacement = true; // default on
+      if (this.randomizePlacement) {
+        this.randomizePlacementLayout();
+      }
+    } catch (e) {
+      console.warn('ProblemSolver: randomizePlacement failed', e);
+    }
+  }
+
+  // Shuffle helper (Fisher-Yates) for arrays
+  shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  // Randomize DOM placement of items in source-zone and variable zones
+  randomizePlacementLayout() {
+    console.debug('PS.randomizePlacementLayout: shuffling source items and variables');
+
+    // Shuffle items inside each source-zone
+    document.querySelectorAll('.source-zone').forEach((source) => {
+      const items = Array.from(source.querySelectorAll('.drag-item'));
+      if (items.length <= 1) return;
+      const shuffled = this.shuffleArray(items.slice());
+      shuffled.forEach((it) => source.appendChild(it)); // appendChild moves the node
+    });
+
+    // Shuffle variable drop-zones inside variable containers
+    document.querySelectorAll('.variables').forEach((varsContainer) => {
+      const zones = Array.from(varsContainer.querySelectorAll('.drop-zone'));
+      if (zones.length <= 1) return;
+      const shuffled = this.shuffleArray(zones.slice());
+      shuffled.forEach((z) => varsContainer.appendChild(z));
+    });
+
+    // Ensure any newly moved items are initialized
+    try {
+      this.ensureItemsInit();
+    } catch (e) {
+      console.warn('ProblemSolver: ensureItemsInit failed after randomize', e);
+    }
+  }
+
+  setRandomizePlacement(enabled) {
+    this.randomizePlacement = Boolean(enabled);
+    try {
+      localStorage.setItem('ps_randomizePlacement', this.randomizePlacement ? '1' : '0');
+    } catch (e) { }
+    console.debug('PS.setRandomizePlacement:', this.randomizePlacement);
   }
 
   /* CALCULATOR SYSTEM */
