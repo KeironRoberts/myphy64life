@@ -66,16 +66,34 @@ export class GameUtilities {
     let pointerOffsetX = 0;
     let pointerOffsetY = 0;
 
-    const onPointerMove = (ev) => {
-      if (!pointerActive || !pointerGhost) return;
+    // Throttle pointer move handling with rAF and cache last hovered zone to avoid full DOM scans
+    let pointerScheduled = false;
+    let lastPointerEvent = null;
+    let lastPointerOverZone = null;
+
+    const processPointerMove = () => {
+      pointerScheduled = false;
+      if (!pointerActive || !pointerGhost || !lastPointerEvent) return;
+      const ev = lastPointerEvent;
       pointerGhost.style.left = ev.clientX - pointerOffsetX + 'px';
       pointerGhost.style.top = ev.clientY - pointerOffsetY + 'px';
-      document
-        .querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over')
-        .forEach((z) => z.classList.remove('drag-over'));
+
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const zone = el && el.closest ? el.closest(zoneSelector) : null;
-      if (zone) zone.classList.add('drag-over');
+      try {
+        if (lastPointerOverZone && lastPointerOverZone !== zone) {
+          lastPointerOverZone.classList.remove('drag-over');
+        }
+        if (zone && zone !== lastPointerOverZone) {
+          zone.classList.add('drag-over');
+          lastPointerOverZone = zone;
+        }
+        if (!zone && lastPointerOverZone) {
+          lastPointerOverZone.classList.remove('drag-over');
+          lastPointerOverZone = null;
+        }
+      } catch (err) {}
+
       const zn = zoneName
         ? zoneName(zone)
         : zone
@@ -84,15 +102,30 @@ export class GameUtilities {
       try {
         debugLog && debugLog(`pointermove at (${ev.clientX},${ev.clientY}) over ${zn}`);
       } catch (e) {}
+
+      lastPointerEvent = null;
+    };
+
+    const onPointerMove = (ev) => {
+      if (!pointerActive || !pointerGhost) return;
+      // store event and schedule one rAF to process
+      lastPointerEvent = { clientX: ev.clientX, clientY: ev.clientY };
+      if (!pointerScheduled) {
+        pointerScheduled = true;
+        requestAnimationFrame(processPointerMove);
+      }
     };
 
     const onPointerUp = (ev) => {
       if (!pointerActive) return;
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       let zone = el && el.closest ? el.closest(zoneSelector) : null;
-      document
-        .querySelectorAll('.drop-zone.drag-over')
-        .forEach((z) => z.classList.remove('drag-over'));
+      try {
+        if (lastPointerOverZone) {
+          lastPointerOverZone.classList.remove('drag-over');
+          lastPointerOverZone = null;
+        }
+      } catch (err) {}
       if (!zone && el) zone = el.closest('.source-zone') || null;
       const { value, originalLabel, tempId, sourceZoneId } = pointerActive.data;
       try {
@@ -170,6 +203,49 @@ export class GameUtilities {
 
     // Synthetic mouse fallback
     let syntheticActive = null;
+    // Synthetic move throttling helpers to avoid per-mouse-move DOM scans
+    let syntheticScheduled = false;
+    let syntheticLastEvent = null;
+    let syntheticLastOverZone = null;
+
+    const processSyntheticMove = function () {
+      syntheticScheduled = false;
+      const mv = syntheticLastEvent;
+      if (!mv || !syntheticActive || !syntheticActive.active) return;
+      try {
+        syntheticActive.ghost.style.left = mv.clientX - 20 + 'px';
+        syntheticActive.ghost.style.top = mv.clientY - 12 + 'px';
+        const el = document.elementFromPoint(mv.clientX, mv.clientY);
+        const zone = el && el.closest ? el.closest(zoneSelector) : null;
+        if (syntheticLastOverZone && syntheticLastOverZone !== zone) {
+          syntheticLastOverZone.classList.remove('drag-over');
+        }
+        if (zone && zone !== syntheticLastOverZone) {
+          zone.classList.add('drag-over');
+          syntheticLastOverZone = zone;
+        }
+        if (!zone && syntheticLastOverZone) {
+          syntheticLastOverZone.classList.remove('drag-over');
+          syntheticLastOverZone = null;
+        }
+        try {
+          debugLog &&
+            debugLog(
+              `synthetic mousemove at (${mv.clientX},${mv.clientY}) over ${
+                zoneName
+                  ? zoneName(zone)
+                  : zone
+                  ? zone.dataset.var || zone.dataset.target || 'unknown'
+                  : 'none'
+              }`
+            );
+        } catch (e) {}
+      } catch (err) {
+        /* ignore */
+      }
+      syntheticLastEvent = null;
+    };
+
     const startSyntheticDrag = (item, ev) => {
       if (window.problemSolverNativeDragActive) return;
       if (syntheticActive && syntheticActive.active) return;
@@ -217,26 +293,12 @@ export class GameUtilities {
 
       syntheticActive.moveHandler = function (mv) {
         if (!syntheticActive.active) return;
-        syntheticActive.ghost.style.left = mv.clientX - 20 + 'px';
-        syntheticActive.ghost.style.top = mv.clientY - 12 + 'px';
-        document
-          .querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over')
-          .forEach((z) => z.classList.remove('drag-over'));
-        const el = document.elementFromPoint(mv.clientX, mv.clientY);
-        const zone = el && el.closest ? el.closest(zoneSelector) : null;
-        if (zone) zone.classList.add('drag-over');
-        try {
-          debugLog &&
-            debugLog(
-              `synthetic mousemove at (${mv.clientX},${mv.clientY}) over ${
-                zoneName
-                  ? zoneName(zone)
-                  : zone
-                  ? zone.dataset.var || zone.dataset.target || 'unknown'
-                  : 'none'
-              }`
-            );
-        } catch (e) {}
+        // schedule processing via rAF and avoid immediate DOM scans
+        syntheticLastEvent = { clientX: mv.clientX, clientY: mv.clientY };
+        if (!syntheticScheduled) {
+          syntheticScheduled = true;
+          requestAnimationFrame(processSyntheticMove);
+        }
       };
 
       syntheticActive.upHandler = function (mu) {

@@ -325,7 +325,12 @@ export class ProblemSolver {
     try {
       el.style.opacity = '';
       if (el.classList) el.classList.remove('dragging');
-      document.querySelectorAll('.drop-zone.drag-over, .source-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
+      try {
+        if (this._lastDragOverElement) {
+          this._lastDragOverElement.classList.remove('drag-over');
+          this._lastDragOverElement = null;
+        }
+      } catch (err) { }
     } catch (e) { }
   }
 
@@ -384,20 +389,24 @@ export class ProblemSolver {
   randomizePlacementLayout() {
     console.debug('PS.randomizePlacementLayout: shuffling source items and variables');
 
-    // Shuffle items inside each source-zone
+    // Shuffle items inside each source-zone (use DocumentFragment to reduce reflow)
     document.querySelectorAll('.source-zone').forEach((source) => {
       const items = Array.from(source.querySelectorAll('.drag-item'));
       if (items.length <= 1) return;
       const shuffled = this.shuffleArray(items.slice());
-      shuffled.forEach((it) => source.appendChild(it)); // appendChild moves the node
+      const frag = document.createDocumentFragment();
+      shuffled.forEach((it) => frag.appendChild(it));
+      source.appendChild(frag);
     });
 
-    // Shuffle variable drop-zones inside variable containers
+    // Shuffle variable drop-zones inside variable containers (use DocumentFragment)
     document.querySelectorAll('.variables').forEach((varsContainer) => {
       const zones = Array.from(varsContainer.querySelectorAll('.drop-zone'));
       if (zones.length <= 1) return;
       const shuffled = this.shuffleArray(zones.slice());
-      shuffled.forEach((z) => varsContainer.appendChild(z));
+      const frag = document.createDocumentFragment();
+      shuffled.forEach((z) => frag.appendChild(z));
+      varsContainer.appendChild(frag);
     });
 
     // Ensure any newly moved items are initialized
@@ -760,10 +769,22 @@ export class ProblemSolver {
       try {
         e.dataTransfer.dropEffect = 'move';
       } catch (err) { }
-      document.querySelectorAll('.drop-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
-      const zone = e.target.closest('.drop-zone, .source-zone');
-      if (zone) zone.classList.add('drag-over');
-      const zoneName = this.zoneName(zone);
+      // Avoid scanning the whole DOM on every dragover: track the last hovered zone element
+      const newZone = e.target && e.target.closest ? e.target.closest('.drop-zone, .source-zone') : null;
+      try {
+        if (this._lastDragOverElement && this._lastDragOverElement !== newZone) {
+          this._lastDragOverElement.classList.remove('drag-over');
+        }
+        if (newZone && newZone !== this._lastDragOverElement) {
+          newZone.classList.add('drag-over');
+          this._lastDragOverElement = newZone;
+        }
+        if (!newZone && this._lastDragOverElement) {
+          this._lastDragOverElement.classList.remove('drag-over');
+          this._lastDragOverElement = null;
+        }
+      } catch (err) { /* ignore DOM errors */ }
+      const zoneName = this.zoneName(newZone);
       // Avoid noisy per-frame dragover logging. Only emit a small event when the hovered zone changes.
       try {
         if (this._lastDragOverZone !== zoneName) {
@@ -773,15 +794,21 @@ export class ProblemSolver {
       } catch (e) { }
 
       // If no zone is hovered, reset the tracker so we can log on next entry
-      if (!zone) this._lastDragOverZone = null;
+      if (!newZone) this._lastDragOverZone = null;
     } catch (err) { }
   }
 
   _onDrop(e) {
     e.preventDefault();
-    document.querySelectorAll('.drop-zone.drag-over').forEach((z) => z.classList.remove('drag-over'));
+    // Clear cached hover element to avoid full DOM scan
+    try {
+      if (this._lastDragOverElement) {
+        this._lastDragOverElement.classList.remove('drag-over');
+        this._lastDragOverElement = null;
+      }
+    } catch (err) { /* ignore */ }
 
-    let zone = e.target.closest('.drop-zone, .source-zone');
+    let zone = e.target && e.target.closest ? e.target.closest('.drop-zone, .source-zone') : null;
     if (!zone) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       if (el) {
