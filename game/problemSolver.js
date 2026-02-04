@@ -1053,7 +1053,7 @@ export class ProblemSolver {
       labelSpan.className = 'zone-label';
       labelSpan.textContent = `${targetVar.toUpperCase()} = `;
       zone.appendChild(labelSpan);
-      displayItem.classList.add('placed');
+      // Append the display item without modifying its classes
       zone.appendChild(displayItem);
     } catch (e) {
       try { console.warn('ProblemSolver: failed to update variable label', e); } catch (err) {}

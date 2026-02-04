@@ -127,12 +127,6 @@
   outline: 3px dashed #2196f3;
 }
 
-/* Placed items (in variable zones) */
-.drag-item.placed {
-  background: #e0e0e0 !important;
-  color: #222 !important;
-}
-
 /* Source items */
 .drag-item.source-item {
   background: #c2bc45ff !important;
