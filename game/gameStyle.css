@@ -172,7 +172,7 @@ body {
   width: max-content !important;
   max-width: 95% !important;
   background: rgba(255, 255, 255, 0.5) !important;
-  transition: all 0.3s ease !important;
+  transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
   white-space: nowrap !important;
 }
 
@@ -182,11 +182,12 @@ body {
   background: rgba(76, 175, 80, 0.1);
 }
 
-.drop-zone.drag-over {
+..drop-zone.drag-over {
   border-color: #2196f3 !important;
   background: rgba(33, 150, 243, 0.15) !important;
   box-shadow: 0 0 20px rgba(33, 150, 243, 0.3) !important;
-  transform: scale(1.02) !important;
+  transform: none !important;
+  outline: 3px solid rgba(33, 150, 243, 0.06) !important;
 }
 
 .variable-zones-wrapper {
