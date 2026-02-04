@@ -358,17 +358,17 @@ export class ProblemSolver {
       container.innerHTML = TEMPLATES.STEP3({ ...this.problem, unknowns: [currentUnknown] }, this.solvedVariables);
     }
 
-    setTimeout(() => this.debouncedSetupDrag(), 100);
-
-    // Optionally randomize the visual placement of source items and variable zones
-    try {
-      if (this.randomizePlacement === undefined) this.randomizePlacement = true; // default on
-      if (this.randomizePlacement) {
-        this.randomizePlacementLayout();
+    setTimeout(() => {
+      this.debouncedSetupDrag();
+      try {
+        if (this.randomizePlacement === undefined) this.randomizePlacement = true; // default on
+        if (this.randomizePlacement && (this.currentStep === 1 || this.currentStep === 2)) {
+          this.randomizePlacementLayout();
+        }
+      } catch (e) {
+        console.warn('ProblemSolver: randomizePlacement failed', e);
       }
-    } catch (e) {
-      console.warn('ProblemSolver: randomizePlacement failed', e);
-    }
+    }, 100);
   }
 
   // Shuffle helper (Fisher-Yates) for arrays
