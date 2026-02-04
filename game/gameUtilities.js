@@ -75,8 +75,8 @@ export class GameUtilities {
       pointerScheduled = false;
       if (!pointerActive || !pointerGhost || !lastPointerEvent) return;
       const ev = lastPointerEvent;
-      pointerGhost.style.left = ev.clientX - pointerOffsetX + 'px';
-      pointerGhost.style.top = ev.clientY - pointerOffsetY + 'px';
+      // Update via transform for compositor-only movement
+      pointerGhost.style.transform = `translate3d(${ev.clientX - pointerOffsetX}px, ${ev.clientY - pointerOffsetY}px, 0)`;
 
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const zone = el && el.closest ? el.closest(zoneSelector) : null;
@@ -185,11 +185,12 @@ export class GameUtilities {
 
       pointerGhost = item.cloneNode(true);
       pointerGhost.style.position = 'fixed';
-      pointerGhost.style.left = e.clientX - 20 + 'px';
-      pointerGhost.style.top = e.clientY - 12 + 'px';
+      // Use transform (translate3d) to avoid layout thrashing from left/top updates
+      pointerGhost.style.transform = `translate3d(${e.clientX - 20}px, ${e.clientY - 12}px, 0)`;
       pointerGhost.style.pointerEvents = 'none';
       pointerGhost.style.opacity = '0.95';
       pointerGhost.style.zIndex = 10000;
+      pointerGhost.style.willChange = 'transform';
       document.body.appendChild(pointerGhost);
 
       const rect = item.getBoundingClientRect();
@@ -213,8 +214,8 @@ export class GameUtilities {
       const mv = syntheticLastEvent;
       if (!mv || !syntheticActive || !syntheticActive.active) return;
       try {
-        syntheticActive.ghost.style.left = mv.clientX - 20 + 'px';
-        syntheticActive.ghost.style.top = mv.clientY - 12 + 'px';
+        // Use transform for cheaper, compositor-only movement
+        syntheticActive.ghost.style.transform = `translate3d(${mv.clientX - 20}px, ${mv.clientY - 12}px, 0)`;
         const el = document.elementFromPoint(mv.clientX, mv.clientY);
         const zone = el && el.closest ? el.closest(zoneSelector) : null;
         if (syntheticLastOverZone && syntheticLastOverZone !== zone) {
@@ -262,11 +263,12 @@ export class GameUtilities {
 
       const ghostEl = item.cloneNode(true);
       ghostEl.style.position = 'fixed';
-      ghostEl.style.left = ev.clientX - 20 + 'px';
-      ghostEl.style.top = ev.clientY - 12 + 'px';
+      // Use transform for cheaper updates
+      ghostEl.style.transform = `translate3d(${ev.clientX - 20}px, ${ev.clientY - 12}px, 0)`;
       ghostEl.style.pointerEvents = 'none';
       ghostEl.style.opacity = '0.95';
       ghostEl.style.zIndex = 10000;
+      ghostEl.style.willChange = 'transform';
       document.body.appendChild(ghostEl);
 
       try {
