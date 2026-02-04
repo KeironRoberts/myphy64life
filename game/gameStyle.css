@@ -549,3 +549,14 @@ input[type='number'] {
 .calculator.dragging .calc-header {
   cursor: grabbing;
 }
+
+/* animation blink (previously in animations.css) */
+.blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
