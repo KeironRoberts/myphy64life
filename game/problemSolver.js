@@ -764,10 +764,16 @@ export class ProblemSolver {
       const zone = e.target.closest('.drop-zone, .source-zone');
       if (zone) zone.classList.add('drag-over');
       const zoneName = this.zoneName(zone);
-      console.info('ProblemSolver: dragover at', e.clientX + ',' + e.clientY, 'over', zoneName);
+      // Avoid noisy per-frame dragover logging. Only emit a small event when the hovered zone changes.
       try {
-        this.utils.debugLog(`dragover at (${e.clientX},${e.clientY}) over ${zoneName}`);
+        if (this._lastDragOverZone !== zoneName) {
+          this._lastDragOverZone = zoneName;
+          this.utils.debugLog(`dragover enter ${zoneName}`);
+        }
       } catch (e) { }
+
+      // If no zone is hovered, reset the tracker so we can log on next entry
+      if (!zone) this._lastDragOverZone = null;
     } catch (err) { }
   }
 
@@ -808,7 +814,15 @@ export class ProblemSolver {
     const it = e.target && e.target.closest && e.target.closest('.drag-item');
     if (it) this.clearDragVisuals(it);
     try {
-      this.utils.debugLog(`dragend: ${it?.dataset?.originalLabel || ''}`);
+      // Determine the destination: variable name or 'source zone'
+      let dest = 'unknown';
+      try {
+        const destZone = it && it.closest && (it.closest('.drop-zone[data-var], .drop-zone[data-target]') || it.closest('.source-zone'));
+        if (destZone) {
+          dest = destZone.classList && destZone.classList.contains('source-zone') ? 'source zone' : (destZone.dataset.var || destZone.dataset.target || 'unknown');
+        }
+      } catch (err) { /* ignore */ }
+      this.utils.debugLog(`dragend: ${it?.dataset?.originalLabel || it.textContent.trim()} to ${dest}`);
     } catch (e) { }
   }
 
