@@ -307,10 +307,17 @@ export async function getHighScoreLeaderboard(limit_num = 100) {
     const q = query(usersRef, orderBy('highScore', 'desc'), limit(limit_num));
     const querySnapshot = await getDocs(q);
     
+    console.log('[LEADERBOARD] Query returned', querySnapshot.size, 'documents');
+    
     const leaderboard = [];
     let position = 1;
     querySnapshot.forEach((doc) => {
       const userData = doc.data();
+      console.log('[LEADERBOARD] User:', {
+        username: userData.username,
+        highScore: userData.highScore,
+        uid: doc.id
+      });
       leaderboard.push({
         position: position++,
         uid: doc.id,
@@ -320,10 +327,12 @@ export async function getHighScoreLeaderboard(limit_num = 100) {
       });
     });
     
-    console.log('[LEADERBOARD] Retrieved', leaderboard.length, 'users from leaderboard');
+    console.log('[LEADERBOARD] Retrieved', leaderboard.length, 'positions from leaderboard');
+    console.log('[LEADERBOARD] Final leaderboard:', leaderboard);
     return leaderboard;
   } catch (error) {
     console.error('[LEADERBOARD] Error getting leaderboard:', error.message);
+    console.error('[LEADERBOARD] Full error:', error);
     throw error;
   }
 }
