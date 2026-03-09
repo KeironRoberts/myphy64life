@@ -64,6 +64,30 @@ body {
 
 }
 
+/* iPad/Tablet horizontal layout */
+@media (min-width: 768px) and (max-width: 1200px) {
+  #gameContainer {
+    flex-direction: row;
+    gap: 10px;
+    margin: 5px auto;
+    height: auto;
+    max-width: 100vw;
+    padding: 5px;
+  }
+
+  #problem-container {
+    width: 45vw !important;
+    height: 45vw !important;
+    aspect-ratio: 1.25;
+    flex-shrink: 0;
+  }
+
+  #gameCanvas {
+    border-width: 4px;
+    border-radius: 15px;
+  }
+}
+
 @media (max-width: 768px) {
   #gameContainer {
     gap: 15px;
@@ -184,6 +208,38 @@ body {
   font-size: 16px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   font-weight: bold;
+}
+
+/* iPad replay button */
+.mobile-replay-btn {
+  display: none;
+  padding: 8px 16px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 5px 0;
+  width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+.mobile-replay-btn:hover {
+  background: #45a049;
+}
+
+.mobile-replay-btn:active {
+  background: #3d8b40;
+}
+
+/* Show replay button on iPad/tablets only */
+@media (min-width: 768px) and (max-width: 1200px) {
+  .mobile-replay-btn {
+    display: block;
+  }
 }
 
 /* Hidden helpers */
