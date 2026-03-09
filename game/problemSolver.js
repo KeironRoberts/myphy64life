@@ -16,6 +16,7 @@ export class ProblemSolver {
     this.solvedProblems = new Set();
     this.currentUnknownIndex = 0;
     this.solvedVariables = [];
+    this.problemsInSession = 0; // Track problems completed THIS session
     console.debug('PS: base state initialized', { currentStep: this.currentStep, score: this.score, startTime: this.startTime });
 
     // load progress
@@ -1372,14 +1373,24 @@ export class ProblemSolver {
 
     localStorage.setItem('physicsHighScore', String(Math.max(this.highScore, this.score)));
     this.completedProblems.push(this.currentProblem);
-    localStorage.setItem('physicsProgress', JSON.stringify(this.completedProblems.slice(-10)));
+    // Note: Full save happens in nextProblem() -> saveProgress()
     this.utils.announce(`Problem complete. Final score: ${Math.round(this.score)} points.`, true);
   }
 
   nextProblem() {
-    console.log('Next problem requested...');
+    console.log('[GAME] Next problem requested...', { problemsInSession: this.problemsInSession });
+    
+    // Save progress after completing a problem
+    this.saveProgress();
+    this.problemsInSession++;
+    
+    // Check if game should finish (4 problems completed)
+    if (this.problemsInSession >= 4) {
+      this.finishGame();
+      return;
+    }
+    
     this.resetProblemState();
-
     this.selectRandomProblem(); // Fixed: select first, mark later
     window.dispatchEvent(new CustomEvent('problemChanged', { detail: this.problem }));
 
@@ -1389,6 +1400,34 @@ export class ProblemSolver {
       this.startTimer();
       this.utils.announce(`New problem: ${this.problem.text.slice(0, 80)}`);
     }, 150);
+  }
+
+  finishGame() {
+    console.log('[GAME] Game finished! Problems completed:', this.problemsInSession, 'Final score:', Math.round(this.score));
+    
+    // Show game finished screen
+    this.contentArea.innerHTML = `
+      <div class="problem-complete">
+        <h2>Game Finished!</h2>
+        <p>You completed ${this.problemsInSession} problems</p>
+        <p>Final Score: ${Math.round(this.score)} pts</p>
+        <button id="homepage" class="btn-home">Back to Homepage</button>
+      </div>
+    `;
+    
+    // Save final progress to Firestore
+    if (window.currentUser) {
+      console.log('[GAME] Saving final game progress for user:', window.currentUser.uid);
+      saveGameProgress(
+        window.currentUser.uid,
+        Math.max(this.highScore, this.score),
+        this.completedProblems
+      ).then(() => {
+        console.log('[GAME] Final progress saved successfully');
+      }).catch((err) => {
+        console.error('[GAME] Error saving final progress:', err);
+      });
+    }
   }
 
   restartAll() {
@@ -1402,14 +1441,28 @@ export class ProblemSolver {
   }
 
   saveProgress() {
-    localStorage.setItem('physicsHighScore', String(Math.max(this.highScore, this.score)));
+    // Update current high score and save to localStorage
+    const newHighScore = Math.max(this.highScore, this.score);
+    if (newHighScore > this.highScore) {
+      this.highScore = newHighScore;
+      localStorage.setItem('physicsHighScore', String(this.highScore));
+      console.log('[GAME] New high score set:', this.highScore);
+    }
+    
+    // Update completed problems in localStorage
+    localStorage.setItem('physicsProgress', JSON.stringify(this.completedProblems));
     
     // Save to Firebase if user is logged in
     if (window.currentUser) {
-      console.log('[GAME] Saving game progress for user:', window.currentUser.uid);
+      console.log('[GAME] Saving progress to Firebase:', { 
+        uid: window.currentUser.uid,
+        highScore: this.highScore,
+        completedProblemsCount: this.completedProblems.length,
+        sessionProblems: this.problemsInSession
+      });
       saveGameProgress(
         window.currentUser.uid,
-        Math.max(this.highScore, this.score),
+        this.highScore,
         this.completedProblems
       ).catch((err) => {
         console.error('[GAME] Firebase save error:', err.message);
