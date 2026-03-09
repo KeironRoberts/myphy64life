@@ -168,18 +168,6 @@ export class ProblemSolver {
     calcButton.onclick = () => this.toggleCalculator();
     this.leftPanel.appendChild(calcButton);
 
-    // Mobile replay button - shown on small screens instead of canvas text
-    const replayBtn = document.createElement('button');
-    replayBtn.id = 'replayAnimationBtn';
-    replayBtn.textContent = 'Replay Animation';
-    replayBtn.setAttribute('aria-label', 'Replay animation');
-    replayBtn.className = 'mobile-replay-btn';
-    replayBtn.onclick = () => {
-      // Trigger animation replay via window event - animations.js listens for this
-      window.dispatchEvent(new Event('replayAnimation'));
-    };
-    this.leftPanel.appendChild(replayBtn);
-
     const contentArea = document.createElement('div');
     contentArea.id = 'panelContent';
     this.leftPanel.appendChild(contentArea);

@@ -79,8 +79,8 @@ function drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds) {
   }
   ctx.restore();
 
-  // Press SPACE text when animation stopped (desktop only)
-  if (!isAnimating && gameReady && window.innerWidth > 768) {
+  // Press SPACE text when animation stopped
+  if (!isAnimating && gameReady) {
     ctx.save();
     ctx.font = 'bold 32px Courier New, monospace';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
@@ -188,13 +188,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && spacePressed && !isAnimating && gameReady) {
     spacePressed = false;
-    startAnimation();
-  }
-});
-
-// Mobile replay button event listener
-window.addEventListener('replayAnimation', () => {
-  if (!isAnimating && gameReady) {
     startAnimation();
   }
 });
