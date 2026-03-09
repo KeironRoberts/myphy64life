@@ -203,7 +203,7 @@ export class ProblemSolver {
       muteBtn.classList.add('ps-fab-mute');
       muteBtn.onclick = () => {
         const symbol = this.utils.toggleMute();
-        this.utils.applyMute(this.backgroundMusic, this.correctSound, this.wrongSound);
+        this.utils.applyMute(this.utils.backgroundMusic, this.correctSound, this.wrongSound);
         const btn = document.getElementById('muteToggle');
         if (btn) {
           btn.textContent = symbol;
@@ -283,7 +283,7 @@ export class ProblemSolver {
       document.body.appendChild(live);
     }
 
-    this.utils.applyMute(this.backgroundMusic, this.correctSound, this.wrongSound);
+    this.utils.applyMute(this.utils.backgroundMusic, this.correctSound, this.wrongSound);
     console.debug('PS.createGameLayout: completed');
   }
   renderPanel() {
