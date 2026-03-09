@@ -5,6 +5,7 @@ declare global {
     problemSolverDragSetup?: boolean;
     problemSolverNativeDragActive?: boolean;
     problemSolverDragMode?: 'mobile' | 'native';
+    currentUser?: any;
   }
 
   // Make Event a bit more permissive for this project

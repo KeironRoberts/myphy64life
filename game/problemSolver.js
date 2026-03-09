@@ -2,6 +2,7 @@
 import { problems } from './config.js';
 import { TEMPLATES } from './templates.js';
 import { GameUtilities } from './gameUtilities.js';
+import { saveGameProgress } from '../auth.js';
 
 
 export class ProblemSolver {
@@ -296,7 +297,7 @@ export class ProblemSolver {
     const sourceZone = el.closest ? el.closest('.drop-zone, .source-zone') : null;
     if (!sourceZone) return 'source';
     if (sourceZone.closest && sourceZone.closest('.source-zone')) return 'source';
-    return (sourceZone.dataset && sourceZone.dataset.var) ? sourceZone.dataset.var : 'unknown';
+    return (sourceZone.dataset && (sourceZone.dataset.var || sourceZone.dataset.target)) ? (sourceZone.dataset.var || sourceZone.dataset.target) : 'unknown';
   }
 
   zoneName(zone) {
@@ -376,7 +377,7 @@ export class ProblemSolver {
     }, 100);
   }
 
-  // Shuffle helper (Fisher-Yates) for arrays
+  // Shuffler (Fisher-Yates) for arrays
   shuffleArray(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -429,6 +430,11 @@ export class ProblemSolver {
   toggleCalculator() {
     const overlay = document.getElementById('calculator');
     if (overlay) {
+      // Remove old click listener before removing element
+      if (this.boundClickHandler) {
+        document.removeEventListener('click', this.boundClickHandler);
+        this.boundClickHandler = null;
+      }
       // Remove old drag listeners before removing element
       if (this.boundMouseMove) {
         document.removeEventListener('mousemove', this.boundMouseMove);
@@ -478,7 +484,7 @@ export class ProblemSolver {
     this.makeCalculatorDraggable();
   }
   bindCalculator() {
-    document.addEventListener('click', (e) => {
+    this.boundClickHandler = (e) => {
       if (e.target.classList.contains('calc-btn')) {
         const display = document.getElementById('calcDisplay');
         if (display) {
@@ -489,7 +495,8 @@ export class ProblemSolver {
       } else if (e.target.classList.contains('close-btn')) {
         this.toggleCalculator();
       }
-    });
+    };
+    document.addEventListener('click', this.boundClickHandler);
 
     this.boundKeyHandler = (/** @type {{ key: string; preventDefault: () => void; }} */ e) => {
       if (!document.getElementById('calculator')) return;
@@ -528,9 +535,14 @@ export class ProblemSolver {
           let expr = current
             .replace(/×/g, '*')
             .replace(/÷/g, '/')
+            .replace(/\)\(/g, ')*(')
+            .replace(/\)(\d)/g, ')*$1')
+            .replace(/(\d)\(/g, '$1*(')
             .replace(/sin/g, 'Math.sin')
             .replace(/cos/g, 'Math.cos')
-            .replace(/tan/g, 'Math.tan');
+            .replace(/tan/g, 'Math.tan')
+            .replace(/√\(([^)]+)\)/g, 'Math.sqrt($1)')
+            .replace(/\(([^)]+)\)²/g, '($1*$1)');
 
           // Convert degrees to radians for trig functions
           expr = expr.replace(/Math\.(sin|cos|tan)\(([^)]+)\)/g, (/** @type {any} */ match, /** @type {any} */ func, /** @type {any} */ angle) => {
@@ -557,6 +569,12 @@ export class ProblemSolver {
       case 'cos':
       case 'tan':
         display.value = current === '0' ? value + '(' : current + value + '(';
+        break;
+      case 'x²':
+        display.value = current === '0' ? '(0)²' : `(${current})²`;
+        break;
+      case '√':
+        display.value = current === '0' ? '√(0)' : `√(${current})`;
         break;
       default:
         display.value = current === '0' && value !== '.' ? value : current + value;
@@ -988,10 +1006,13 @@ export class ProblemSolver {
     this.utils.debugLog(`handleDrop target ${zoneName} value ${value} from ${sourceZoneId}`);
   } catch (e) {}
 
+  // Check if we're dropping back into source zone from a variable zone
+  const isDroppingToSource = zone.classList && zone.classList.contains('source-zone');
+
   // If the item originated in a variable zone, identify the previous drag-item but do NOT remove it yet
   let _prevChildToRemove = null;
   if (sourceZoneId && sourceZoneId !== 'unknown' && sourceZoneId !== 'source') {
-    const prevZone = document.querySelector(`[data-var="${sourceZoneId}"]`);
+    const prevZone = document.querySelector(`[data-var="${sourceZoneId}"], [data-target="${sourceZoneId}"]`);
     if (prevZone) {
       const prevChild = prevZone.querySelector('.drag-item');
       if (prevChild) {
@@ -1037,9 +1058,9 @@ export class ProblemSolver {
     }
   }
 
-  // If the destination already had an item, move it back to the source panel
+  // If the destination already had an item, swap it back to source
   const existingValue = zone.querySelector('.drag-item');
-  if (existingValue && zone.closest('.source-zone') === null) {
+  if (existingValue && !isDroppingToSource) {
     const sourceContainer = document.querySelector('.source-zone');
     if (sourceContainer) {
       const restoredItem = existingValue.cloneNode(true);
@@ -1074,13 +1095,13 @@ export class ProblemSolver {
         }
       } catch (e) {}
     }
-    return; // Exit early after handling existing item
+    // DO NOT RETURN - continue to add the new item to the zone
   }
 
   // No existing item - handle new drop
   const targetVar = zone.dataset.var || zone.dataset.target;
   
-  if (targetVar && zone.closest('.source-zone') === null) {
+  if (targetVar && !isDroppingToSource) {
     // Dropped into variable zone
     const displayItem = document.createElement('div');
     displayItem.draggable = true;
@@ -1131,35 +1152,71 @@ export class ProblemSolver {
       }
     } catch (e) {}
     
-  } else {
-    // Dropped into source zone
-    const sourceContainer = zone.closest('.source-zone') || document.querySelector('.source-zone');
+  } else if (isDroppingToSource) {
+    // Dropped into source zone - restore item from variable zone
+    const sourceContainer = zone;
+    console.info('ProblemSolver: DROP TO SOURCE - sourceZoneId:', sourceZoneId, 'originalLabel:', originalLabel);
+    try { this.utils.debugLog(`DROP TO SOURCE: from zone "${sourceZoneId}", item "${originalLabel}"`); } catch (e) {}
+    
     if (sourceContainer) {
-      // Prevent duplicate items
-      if ([...sourceContainer.children].some(child => 
-        child.classList && child.classList.contains('drag-item') && child.textContent === originalLabel)) {
-        console.info('ProblemSolver: drop failed — duplicate item already present in source zone');
-        try { this.utils.debugLog(`Drop failed: duplicate source item ${originalLabel}`); } catch (e) {}
-        return;
+      // Check if item already exists in source (don't create duplicates)
+      const itemExists = [...sourceContainer.children].some(child => 
+        child && child.classList && child.classList.contains('drag-item') && 
+        (child.dataset.tempDragId === tempId || child.textContent.trim() === originalLabel)
+      );
+      
+      if (!itemExists) {
+        const restored = document.createElement('div');
+        restored.className = 'drag-item source-item';
+        restored.draggable = true;
+        restored.dataset.value = value;
+        restored.dataset.originalLabel = originalLabel;
+        restored.dataset.label = originalLabel;
+        restored.dataset.tempDragId = `drag-${Date.now()}`;
+        restored.tabIndex = 0;
+        restored.setAttribute('role', 'button');
+        restored.setAttribute('aria-grabbed', 'false');
+        restored.textContent = originalLabel;
+        sourceContainer.appendChild(restored);
+        try { this.playSfx(this.dropSfx); } catch (e) {}
+        try { this.utils.announce(`Restored ${originalLabel} to source`); } catch (e) {}
+        console.info('ProblemSolver: restored item to source:', originalLabel);
+        try { this.utils.debugLog(`Restored to source: ${originalLabel}`); } catch (e) {}
       }
-      
-      // Prevent duplicate in variable zone (edge case check)
-      if (zone.querySelector('.drag-item')) return;
-      
-      const restored = document.createElement('div');
-      restored.className = 'drag-item source-item';
-      restored.draggable = true;
-      restored.dataset.value = value;
-      restored.dataset.originalLabel = originalLabel;
-      restored.dataset.label = originalLabel;
-      restored.dataset.tempDragId = `drag-${Date.now()}`;
-      restored.tabIndex = 0;
-      restored.setAttribute('role', 'button');
-      restored.setAttribute('aria-grabbed', 'false');
-      restored.textContent = originalLabel;
-      sourceContainer.appendChild(restored);
-      try { this.playSfx(this.dropSfx); } catch (e) {}
-      try { this.utils.announce(`Restored ${originalLabel} to source`); } catch (e) {}
+
+      // Remove the item from variable zone after restoring to source
+      // If item came from a variable zone (not the source), clean it up
+      console.info('ProblemSolver: checking removal - sourceZoneId:', sourceZoneId, 'type:', typeof sourceZoneId);
+      if (sourceZoneId && sourceZoneId !== 'unknown' && sourceZoneId !== 'source') {
+        console.info('ProblemSolver: attempting to remove from zone:', sourceZoneId);
+        try { this.utils.debugLog(`Attempting to remove item from zone: ${sourceZoneId}`); } catch (e) {}
+        
+        const sourceVarZone = document.querySelector(`[data-var="${sourceZoneId}"], [data-target="${sourceZoneId}"]`);
+        console.info('ProblemSolver: found zone?', !!sourceVarZone, 'selector was [data-var="' + sourceZoneId + '"] or [data-target="' + sourceZoneId + '"]');
+        try { this.utils.debugLog(`Zone found: ${!!sourceVarZone}`); } catch (e) {}
+        
+        if (sourceVarZone) {
+          const itemInZone = sourceVarZone.querySelector('.drag-item');
+          console.info('ProblemSolver: found item in zone?', !!itemInZone);
+          try { this.utils.debugLog(`Item in zone: ${!!itemInZone}`); } catch (e) {}
+          
+          if (itemInZone) {
+            console.info('ProblemSolver: REMOVING item:', itemInZone.textContent.trim());
+            itemInZone.remove();
+            sourceVarZone.dataset.value = '?';
+            delete sourceVarZone.dataset.label;
+            sourceVarZone.innerHTML = `${sourceZoneId.toUpperCase()} = ?`;
+            console.info('ProblemSolver: item removed and zone reset');
+            try { this.utils.debugLog(`Item removed, zone reset: ${sourceZoneId}`); } catch (e) {}
+          }
+        } else {
+          console.warn('ProblemSolver: could not find source var zone with selector [data-var="' + sourceZoneId + '"] or [data-target="' + sourceZoneId + '"]');
+          try { this.utils.debugLog(`ERROR: Zone not found for: ${sourceZoneId}`); } catch (e) {}
+        }
+      } else {
+        console.info('ProblemSolver: sourceZoneId not valid for removal:', sourceZoneId);
+        try { this.utils.debugLog(`Invalid Zone ID for removal: ${sourceZoneId}`); } catch (e) {}
+      }
     }
   }
 
@@ -1180,7 +1237,7 @@ export class ProblemSolver {
 
     if (correct) {
       this.utils.playSound(this.correctSound);
-      this.utils.updateScore(30);
+      this.updateScore(30);
       this.solvedVariables = this.problem.givens.map((g) => ({
         value: g.value,
         target: g.target,
@@ -1219,7 +1276,7 @@ export class ProblemSolver {
 
     if (allCorrect) {
       this.utils.playSound(this.correctSound);
-      this.utils.updateScore(30);
+      this.updateScore(30);
       this.utils.announce('Step 2 complete. Proceed to Step 3.');
       this.nextStep();
     } else {
@@ -1236,8 +1293,12 @@ export class ProblemSolver {
 
     if (isNaN(answer)) return this.highlightWrongAnswer();
 
-    const tolerance = 1.0;
-    if (Math.abs(answer - expected) <= tolerance) {
+    // Use relative tolerance (5% error) with a minimum absolute tolerance of 0.5
+    // This handles both small numbers and large numbers with different decimal rounding
+    const relativeError = Math.abs(answer - expected) / Math.abs(expected);
+    const isClose = relativeError <= 0.05 || Math.abs(answer - expected) <= 0.5;
+    
+    if (isClose) {
       this.utils.playSound(this.correctSound);
       this.utils.announce(`Correct — ${currentUnknown.target.toUpperCase()} = ${answer}`);
       this.solvedVariables.push({
@@ -1247,7 +1308,7 @@ export class ProblemSolver {
       });
 
       this.currentUnknownIndex++;
-      this.utils.updateScore(40);
+      this.updateScore(40);
 
       setTimeout(() => {
         if (this.problem.unknowns?.[this.currentUnknownIndex]) {
@@ -1281,8 +1342,10 @@ export class ProblemSolver {
       this.mistakes++;
       this.score = Math.max(0, this.score - 10);
     } else if (points > 0) {
-      const timeBonus = Math.max(0.5, 3.0 - (Date.now() - this.startTime) / 10000);
-      this.score += points * timeBonus;
+      // Exponential time decay: score multiplier approaches 0 as time increases
+      const elapsedSeconds = (Date.now() - this.startTime) / 1000;
+      const timeMultiplier = Math.max(0.1, Math.exp(-elapsedSeconds / 40));
+      this.score += points * timeMultiplier;
     }
 
     const scoreEl = document.getElementById('scoreDisplay');
@@ -1340,6 +1403,15 @@ export class ProblemSolver {
 
   saveProgress() {
     localStorage.setItem('physicsHighScore', String(Math.max(this.highScore, this.score)));
+    
+    // Save to Firebase if user is logged in
+    if (window.currentUser) {
+      saveGameProgress(
+        window.currentUser.uid,
+        Math.max(this.highScore, this.score),
+        this.completedProblems
+      ).catch((err) => console.log('Firebase save error:', err));
+    }
   }
 }
 

@@ -1,0 +1,60 @@
+<!-- login.html - Login/Signup Page -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PHY64LIFE - Login</title>
+    <link rel="stylesheet" href="login.css" />
+  </head>
+  <body>
+    <div class="auth-container">
+      <div class="auth-box">
+        <div class="logo-section">
+          <h1>PHY64LIFE</h1>
+          <p>Physics Problem Solver</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+          <h2>Login</h2>
+          <input type="email" id="loginEmail" placeholder="Email" class="auth-input" />
+          <input type="password" id="loginPassword" placeholder="Password" class="auth-input" />
+          <button id="loginBtn" class="auth-button">Login</button>
+          <p class="auth-toggle">
+            Don't have an account?
+            <a href="#" onclick="toggleForms()">Sign up</a>
+          </p>
+          <div id="loginError" class="error-message"></div>
+          <div id="loginLoading" class="loading-spinner hidden"></div>
+        </div>
+
+        <!-- Signup Form -->
+        <div id="signupForm" class="auth-form">
+          <h2>Create Account</h2>
+          <input type="text" id="signupUsername" placeholder="Username" class="auth-input" />
+          <input type="email" id="signupEmail" placeholder="Email" class="auth-input" />
+          <input type="password" id="signupPassword" placeholder="Password" class="auth-input" />
+          <input type="password" id="signupConfirm" placeholder="Confirm Password" class="auth-input" />
+          <button id="signupBtn" class="auth-button">Sign Up</button>
+          <p class="auth-toggle">
+            Already have an account?
+            <a href="#" onclick="toggleForms()">Login</a>
+          </p>
+          <div id="signupError" class="error-message"></div>
+          <div id="signupLoading" class="loading-spinner hidden"></div>
+        </div>
+
+        <!-- Divider -->
+        <div class="divider">
+          <span>Or continue as</span>
+        </div>
+
+        <!-- Guest Option -->
+        <button id="guestBtn" class="guest-button">Play as Guest</button>
+      </div>
+    </div>
+
+    <script type="module" src="login.js"></script>
+  </body>
+</html>

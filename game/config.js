@@ -46,16 +46,16 @@ export const problems = [
     givens: [
       { value: '8.0', label: '8.0 m/s', target: 'vx' },
       { value: '0', label: '0 m/s', target: 'vy0' },
-      { value: '80', label: '80 m', target: 'h' },
+      { value: '80', label: '80 m', target: 'y' },
       { value: '9.8', label: '9.8 m/s²', target: 'g' },
     ],
     formulas: [
       { formula: 'x = vx × t', label: 'x = vx × t', target: 'range' },
-      { formula: 'h = ½gt²', label: 'h = ½gt²', target: 'time' },
+      { formula: 'y = ½gt²', label: 'y = ½gt²', target: 'time' },
     ],
     unknowns: [
-      { target: 'time', formula: 'h = ½gt²', answer: 4.0 },
-      { target: 'range', formula: 'x = vx × t', answer: 32.3 },
+      { target: 'time', formula: 'y = ½gt²', answer: 4.04 },
+      { target: 'range', formula: 'x = vx * t', answer: 32.3 },
     ],
   },
 
@@ -66,12 +66,16 @@ export const problems = [
       { value: '45', label: '45°', target: 'angle' },
       { value: '9.8', label: '9.8 m/s²', target: 'g' },
     ],
-    formulas: [{ formula: 't = 2x tanθ / g', label: 't = 2x tanθ / g', target: 'time' }],
-    unknowns: [{ target: 'time', formula: 't = 2x tanθ / g', answer: 12.7 }],
+    formulas: [
+      { formula: 't = sqrt(2x tanθ / g)', label: 't = √(2x tanθ / g)', target: 'time' }
+    ],
+    unknowns: [
+      { target: 'time', formula: 't = sqrt(2x tanθ / g)', answer: 5.05 }
+    ],
   },
 
   {
-    text: 'Will Clark throws baseball at 25 m/s horizontal. Takes 3s to return. Calculate range.',
+    text: 'Will Clark throws a baseball horizontally at 25 m/s. If the ball stays in the air for 3 s, calculate the horizontal range.',
     givens: [
       { value: '25', label: '25 m/s', target: 'vx' },
       { value: '3', label: '3 s', target: 't' },
@@ -84,16 +88,16 @@ export const problems = [
     text: 'Bald eagle at 135m drops fish at 25 m/s. How far from drop point does fish land?',
     givens: [
       { value: '25', label: '25 m/s', target: 'vx' },
-      { value: '135', label: '135 m', target: 'h' },
+      { value: '135', label: '135 m', target: 'x' },
       { value: '9.8', label: '9.8 m/s²', target: 'g' },
     ],
     formulas: [
-      { formula: 'h = ½gt²', label: 'h = ½gt²', target: 'time' },
+      { formula: 't = sqrt(2x tanθ / g)', label: 't = sqrt(2x / g)', target: 'time' },
       { formula: 'x = vx × t', label: 'x = vx × t', target: 'range' },
     ],
     unknowns: [
-      { target: 'time', formula: 'h = ½gt²', answer: 5.25 },
-      { target: 'range', formula: 'x = vx × t', answer: 131 },
+      { target: 'time', formula: 't = sqrt(2x / g)', answer: 5.25 },
+      { target: 'range', formula: 'x = vx × t', answer: 131.3 },
     ],
   },
 ];

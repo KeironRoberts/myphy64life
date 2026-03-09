@@ -180,6 +180,8 @@ export const TEMPLATES = {
       '+',
       '(',
       ')',
+      'x²',
+      '√',
       'sin',
       'cos',
       'tan',
