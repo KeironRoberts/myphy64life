@@ -1406,11 +1406,17 @@ export class ProblemSolver {
     
     // Save to Firebase if user is logged in
     if (window.currentUser) {
+      console.log('[GAME] Saving game progress for user:', window.currentUser.uid);
       saveGameProgress(
         window.currentUser.uid,
         Math.max(this.highScore, this.score),
         this.completedProblems
-      ).catch((err) => console.log('Firebase save error:', err));
+      ).catch((err) => {
+        console.error('[GAME] Firebase save error:', err.message);
+        console.error('[GAME] Full error:', err);
+      });
+    } else {
+      console.log('[GAME] User not logged in, only saving to localStorage');
     }
   }
 }

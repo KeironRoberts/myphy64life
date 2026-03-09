@@ -96,14 +96,27 @@ export async function logoutUser() {
 // Save game progress to Firestore
 export async function saveGameProgress(userId, highScore, completedProblems) {
   try {
+    console.log('[GAME] saveGameProgress called:', { userId, highScore, completedProblems: completedProblems?.length });
     const userRef = doc(db, 'users', userId);
+    
+    // Get current data to compare high scores
+    const userDoc = await getDoc(userRef);
+    const currentHighScore = userDoc.data()?.highScore || 0;
+    const newHighScore = Math.max(highScore, currentHighScore);
+    
+    console.log('[GAME] Current high score:', currentHighScore, 'New high score:', newHighScore);
+    
+    // Update the document
     await updateDoc(userRef, {
-      highScore: Math.max(highScore, (await getDoc(userRef)).data()?.highScore || 0),
+      highScore: newHighScore,
       completedProblems: completedProblems,
       lastSession: new Date().toISOString(),
     });
+    
+    console.log('[GAME] Progress saved successfully to Firestore');
   } catch (error) {
-    console.error('Error saving progress:', error);
+    console.error('[GAME] Error saving progress:', error.message);
+    console.error('[GAME] Error details:', error);
   }
 }
 
