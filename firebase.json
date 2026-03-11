@@ -1,0 +1,30 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      ".*",
+      "*.log",
+      "tools/**",
+      "types/**",
+      "game/animations.js",
+      ".eslintignore.disabled",
+      ".eslintrc.json",
+      ".prettierrc",
+      ".prettierignore",
+      "eslint.config.cjs",
+      "tsconfig.json",
+      "package.json",
+      "package-lock.json",
+      "FIREBASE_SETUP.md"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
