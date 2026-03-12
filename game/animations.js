@@ -37,6 +37,9 @@ const clouds = [];
 let currentVx = physics.vx;
 let currentVy = physics.vy;
 let currentStartX = physics.startX;
+let currentStartY = logicalHeight - 90; // Can be overridden for specific problems
+let currentGroundY = currentStartY + 20; // Can be overridden for specific problems
+let isFreeFallProblem = false; // Track if this is a free-fall problem
 const radius = physics.radius;
 const Tscale = physics.Tscale;
 const g = physics.g;
@@ -137,12 +140,12 @@ function update(currentTime) {
 
   // Use current problem physics values
   const x = currentStartX + currentVx * t;
-  const y = startY - (currentVy * t - 0.5 * g * t * t);
+  const y = currentStartY - (currentVy * t - 0.5 * g * t * t);
   const ballBottom = y + radius;
 
-  if (ballBottom >= groundY || x > logicalWidth) {
+  if (ballBottom >= currentGroundY || x > logicalWidth) {
     isAnimating = false;
-    drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds);
+    drawBackground(ctx, currentGroundY, logicalWidth, logicalHeight, clouds);
     drawTrail(ctx, positions);
     drawProjectile(ctx, x, y, radius, true);
     return;
@@ -151,7 +154,7 @@ function update(currentTime) {
   positions.push({ x, y });
   if (positions.length > 300) positions.shift();
 
-  drawBackground(ctx, groundY, logicalWidth, logicalHeight, clouds);
+  drawBackground(ctx, currentGroundY, logicalWidth, logicalHeight, clouds);
   drawTrail(ctx, positions);
   drawProjectile(ctx, x, y, radius);
 
@@ -169,9 +172,29 @@ function startAnimation() {
 // PROBLEM SOLVER INTEGRATION - Sync animation with current problem
 window.addEventListener('problemChanged', (e) => {
   const problem = e.detail;
+  const problemText = problem.text.toLowerCase();
+  
+  // Check if this is a free-fall problem (stone from cliff or eagle drops fish)
+  isFreeFallProblem = (problemText.includes('stone') && problemText.includes('cliff')) ||
+                      (problemText.includes('eagle') && problemText.includes('drops'));
+  
   const vxGiven = problem.givens.find((g) => g.target === 'vx');
   currentVx = (vxGiven ? parseFloat(vxGiven.value) : 25) * 3;
-  currentVy = 40 * 3; // Fixed visual consistency
+  
+  if (isFreeFallProblem) {
+    // For free-fall problems: zero initial vertical velocity (pure drop)
+    currentVy = 0;
+    // Start from higher position to simulate cliff/height (70% up the canvas)
+    currentStartY = logicalHeight * 0.3;
+    // Ground is at bottom
+    currentGroundY = logicalHeight - 20;
+  } else {
+    // Normal projectile motion
+    currentVy = 40 * 3; // Fixed visual consistency
+    currentStartY = logicalHeight - 90;
+    currentGroundY = logicalHeight - 70;
+  }
+  
   currentStartX = 50;
   // Resize display to match any layout changes then start animation
   resizeCanvasDisplay();
